@@ -33,7 +33,7 @@ pub async fn fetch_orchestration_source(
                 false,
             )
             .await
-            .map_err(|error| anyhow::anyhow!("{error:#}"))?;
+            .map_err(|error| coded_error("ORCHESTRATION_SOURCE_FETCH_FAILED", format_args!("{error:#}")))?;
         if !response.status().is_success() {
             return Err(coded_error(
                 "ORCHESTRATION_SOURCE_FETCH_FAILED",
