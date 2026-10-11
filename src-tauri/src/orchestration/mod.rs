@@ -154,7 +154,8 @@ pub async fn apply_to_profile_config(profile_uid: &str, config: &mut Mapping) ->
     let state = load_state(profile_uid).await?;
     if state.active_mode == GroupMode::Upstream
         && !state.groups.values().any(|binding| {
-            binding.mode.is_some_and(|mode| mode != GroupMode::Upstream) && !binding.nodes.is_empty()
+            binding.mode.is_some_and(|mode| mode != GroupMode::Upstream)
+                && !binding.nodes.is_empty()
         })
     {
         return Ok(());
