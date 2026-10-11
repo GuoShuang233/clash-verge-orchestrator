@@ -6,6 +6,13 @@ export interface OrchestrationNodeRef {
   name: string
 }
 
+interface OrchestrationGroupBinding {
+  mode?: GroupMode
+  upstream_name?: string
+  nodes: OrchestrationNodeRef[]
+  custom?: Record<string, unknown> | null
+}
+
 export interface OrchestrationSource {
   source_id: string
   name: string
