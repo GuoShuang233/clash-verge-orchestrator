@@ -242,6 +242,7 @@ pub fn compile_value(config: &mut Value, sources: &[ParsedSubscription], state: 
         match mode {
             GroupMode::Upstream => {}
             GroupMode::Hybrid => {
+                let group = group.as_mapping_mut().context("proxy group is not a mapping")?;
                 for node_ref in &binding.nodes {
                     if injected.contains(&node_ref.name) {
                         append_group_proxy(group, &node_ref.name)?;
@@ -574,8 +575,7 @@ fn find_or_create_group<'a>(config: &'a mut Mapping, name: &str) -> Result<&'a m
     Ok(groups.last_mut().unwrap())
 }
 
-fn append_group_proxy(group: &mut Value, name: &str) -> Result<()> {
-    let group = group.as_mapping_mut().context("proxy group is not a mapping")?;
+fn append_group_proxy(group: &mut Mapping, name: &str) -> Result<()> {
     let proxies = group
         .entry(Value::String("proxies".into()))
         .or_insert_with(|| Value::Sequence(Vec::new()));

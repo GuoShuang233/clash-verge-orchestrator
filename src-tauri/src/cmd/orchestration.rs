@@ -3,6 +3,7 @@ use crate::{
     orchestration::{self, NodeSummary, OrchestrationState, SourceInput, SubscriptionSource},
     utils::network::{NetworkManager, ProxyType},
 };
+use smartstring::alias::String as SmartString;
 
 #[tauri::command]
 pub async fn preview_orchestration_source(source_id: String, content: String) -> CmdResult<Vec<NodeSummary>> {
@@ -26,7 +27,7 @@ pub async fn fetch_orchestration_source(
                 ProxyType::None
             },
             timeout_seconds.or(Some(30)),
-            source.user_agent.clone(),
+            source.user_agent.clone().map(SmartString::from),
             false,
         )
         .await
