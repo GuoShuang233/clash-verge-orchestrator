@@ -70,7 +70,7 @@ pub struct SubscriptionSource {
     pub user_agent: Option<String>,
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
@@ -273,10 +273,10 @@ fn parse_content(content: &str) -> Result<Value> {
         bail!("subscription content is empty");
     }
 
-    if let Ok(value) = serde_yaml_ng::from_str::<Value>(content) {
-        if yaml_contains_proxy_data(&value) {
-            return normalize_yaml_value(value);
-        }
+    if let Ok(value) = serde_yaml_ng::from_str::<Value>(content)
+        && yaml_contains_proxy_data(&value)
+    {
+        return normalize_yaml_value(value);
     }
 
     if looks_like_uri_list(content) {
@@ -597,7 +597,10 @@ mod tests {
     const EXTERNAL: &str = "proxies:\n  - name: moyu-node\n    type: vless\n    server: xray.example\n    port: 443\n    uuid: test\n    tls: true\n    network: ws\n    ws-opts:\n      path: /test/\n";
 
     fn state(mode: GroupMode) -> OrchestrationState {
-        let node = parse_subscription("moyu", EXTERNAL).unwrap().nodes.remove(0);
+        let node = parse_subscription("moyu", EXTERNAL)
+            .expect("test subscription must parse")
+            .nodes
+            .remove(0);
         OrchestrationState {
             sources: vec![],
             active_mode: mode,
