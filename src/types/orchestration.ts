@@ -34,3 +34,9 @@ export interface OrchestrationNodeSummary {
   name: string
   proxy_type: string
 }
+
+export interface OrchestrationSourceFetchResult {
+  nodes: OrchestrationNodeSummary[]
+  used_cache: boolean
+  fetched_at: number
+}
