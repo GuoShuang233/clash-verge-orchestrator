@@ -303,7 +303,7 @@ pub async fn apply_to_profile_config(profile_uid: &str, config: &mut Mapping) ->
 
     let mut parsed_sources = Vec::new();
     for source in state.sources.iter().filter(|source| source.enabled) {
-        let fetched = fetch_source_content(profile_uid, source).await?;
+        let fetched = fetch_source_content(profile_uid, source, Some(30)).await?;
         parsed_sources.push(parse_subscription(&source.source_id, &fetched.content)?);
     }
 
