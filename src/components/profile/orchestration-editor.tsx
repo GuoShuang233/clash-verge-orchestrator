@@ -72,9 +72,8 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
   const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [sourceStatus, setSourceStatus] = useState<
-    Record<string, OrchestrationSourceFetchResult>
-  >({})
+  const [sourceStatus, setSourceStatus] = useState<Record<string, OrchestrationSourceFetchResult>>({})
+  const [sourceErrors, setSourceErrors] = useState<Record<string, string>>({})
 
   const refreshSource = async (source: OrchestrationSource) => {
     setLoading(true)
@@ -82,8 +81,17 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
       const result = await fetchOrchestrationSource(source, profileUid)
       setNodes((current) => ({ ...current, [source.source_id]: result.nodes }))
       setSourceStatus((current) => ({ ...current, [source.source_id]: result }))
+      setSourceErrors((current) => {
+        const next = { ...current }
+        delete next[source.source_id]
+        return next
+      })
     } catch (error) {
       setNodes((current) => ({ ...current, [source.source_id]: [] }))
+      setSourceErrors((current) => ({
+        ...current,
+        [source.source_id]: error instanceof Error ? error.message : String(error),
+      }))
       showNotice.error(error)
     } finally {
       setLoading(false)
@@ -395,12 +403,19 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
             sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
           >
             <Chip
-              label={
-                source.name +
-                ' · ' +
-                source.url +
-                (sourceStatus[source.source_id]?.used_cache ? ' · cached' : '')
-              }
+              label={(() => {
+                const result = sourceStatus[source.source_id]
+                const error = sourceErrors[source.source_id]
+                const status = error
+                  ? 'failed · no usable cache'
+                  : result?.used_cache
+                    ? 'cached · last success ' + new Date(result.fetched_at * 1000).toLocaleString()
+                    : result
+                      ? 'live · ' + new Date(result.fetched_at * 1000).toLocaleString()
+                      : 'not fetched'
+                return source.name + ' · ' + status
+              })()}
+              color={sourceErrors[source.source_id] ? 'error' : undefined}
               sx={{ maxWidth: 'calc(100% - 80px)' }}
             />
             <IconButton
