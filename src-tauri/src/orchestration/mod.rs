@@ -572,7 +572,7 @@ fn find_or_create_group<'a>(config: &'a mut Mapping, name: &str) -> Result<&'a m
     group.insert(Value::String("type".into()), Value::String("select".into()));
     group.insert(Value::String("proxies".into()), Value::Sequence(Vec::new()));
     groups.push(Value::Mapping(group));
-    Ok(groups.last_mut().unwrap())
+    groups.last_mut().context("failed to create proxy group")
 }
 
 fn append_group_proxy(group: &mut Mapping, name: &str) -> Result<()> {
@@ -589,6 +589,7 @@ fn append_group_proxy(group: &mut Mapping, name: &str) -> Result<()> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
 
