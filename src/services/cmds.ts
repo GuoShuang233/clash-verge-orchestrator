@@ -4,17 +4,14 @@ import dayjs from 'dayjs'
 
 import type { CommandFailure } from '@/services/notice-service'
 import { showNotice } from '@/services/notice-service'
-import type { ProxyViewV1 } from '@/types/proxy-view'
 import type {
   OrchestrationNodeSummary,
   OrchestrationSource,
   OrchestrationState,
 } from '@/types/orchestration'
 import type {
-  OrchestrationNodeSummary,
-  OrchestrationSource,
-  OrchestrationState,
-} from '@/types/orchestration'
+  ProxyViewV1,
+} from '@/types/proxy-view'
 import { debugLog } from '@/utils/debug'
 
 export async function copyClashEnv() {
