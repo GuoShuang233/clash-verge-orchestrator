@@ -72,7 +72,9 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
   const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [sourceStatus, setSourceStatus] = useState<Record<string, OrchestrationSourceFetchResult>>({})
+  const [sourceStatus, setSourceStatus] = useState<
+    Record<string, OrchestrationSourceFetchResult>
+  >({})
   const [sourceErrors, setSourceErrors] = useState<Record<string, string>>({})
 
   const refreshSource = async (source: OrchestrationSource) => {
@@ -90,7 +92,8 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
       setNodes((current) => ({ ...current, [source.source_id]: [] }))
       setSourceErrors((current) => ({
         ...current,
-        [source.source_id]: error instanceof Error ? error.message : String(error),
+        [source.source_id]:
+          error instanceof Error ? error.message : String(error),
       }))
       showNotice.error(error)
     } finally {
@@ -409,9 +412,11 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
                 const status = error
                   ? 'failed · no usable cache'
                   : result?.used_cache
-                    ? 'cached · last success ' + new Date(result.fetched_at * 1000).toLocaleString()
+                    ? 'cached · last success ' +
+                        new Date(result.fetched_at * 1000).toLocaleString()
                     : result
-                      ? 'live · ' + new Date(result.fetched_at * 1000).toLocaleString()
+                      ? 'live · ' +
+                          new Date(result.fetched_at * 1000).toLocaleString()
                       : 'not fetched'
                 return source.name + ' · ' + status
               })()}
