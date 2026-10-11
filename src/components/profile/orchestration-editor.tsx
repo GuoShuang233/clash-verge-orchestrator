@@ -314,11 +314,9 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
           </Button>
         </Stack>
         {state.sources.map((source) => (
-          <Stack
+          <Box
             key={source.source_id}
-            direction="row"
-            alignItems="center"
-            spacing={1}
+            sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
           >
             <Chip
               label={source.name + ' · ' + source.url}
@@ -338,7 +336,7 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
             >
               <DeleteOutlineRounded />
             </IconButton>
-          </Stack>
+          </Box>
         ))}
         <Divider />
         <FormControl fullWidth size="small">
@@ -413,7 +411,9 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
                       p: 1,
                     }}
                   >
-                    <Stack direction="row" alignItems="center" spacing={1}>
+                    <Box
+                      sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                    >
                       <Typography sx={{ flex: 1 }} variant="body2">
                         {group.name}{' '}
                         <Typography component="span" variant="caption">
@@ -434,12 +434,15 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
                         <MenuItem value="hybrid">Hybrid</MenuItem>
                         <MenuItem value="custom">Custom</MenuItem>
                       </Select>
-                    </Stack>
-                    <Stack
-                      direction="row"
-                      flexWrap="wrap"
-                      gap={0.5}
-                      sx={{ mt: 1, minHeight: 28 }}
+                    </Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 0.5,
+                        mt: 1,
+                        minHeight: 28,
+                      }}
                     >
                       {binding.nodes.map((node) => (
                         <Chip
@@ -449,7 +452,7 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
                           onDelete={() => removeNode(group.name, node)}
                         />
                       ))}
-                    </Stack>
+                    </Box>
                   </Box>
                 )
               })}
@@ -460,3 +463,4 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
     </BaseDialog>
   )
 }
+
