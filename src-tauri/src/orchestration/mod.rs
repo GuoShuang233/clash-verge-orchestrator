@@ -244,7 +244,7 @@ pub fn compile_value(config: &mut Value, sources: &[ParsedSubscription], state: 
             GroupMode::Hybrid => {
                 for node_ref in &binding.nodes {
                     if injected.contains(&node_ref.name) {
-                        append_group_proxy(group, &node_ref.name);
+                        append_group_proxy(group, &node_ref.name)?;
                     }
                 }
             }
@@ -257,7 +257,7 @@ pub fn compile_value(config: &mut Value, sources: &[ParsedSubscription], state: 
                 let group = group.as_mapping_mut().context("custom proxy group is not a mapping")?;
                 for node_ref in &binding.nodes {
                     if injected.contains(&node_ref.name) {
-                        append_group_proxy(group, &node_ref.name);
+                        append_group_proxy(group, &node_ref.name)?;
                     }
                 }
             }
@@ -574,16 +574,18 @@ fn find_or_create_group<'a>(config: &'a mut Mapping, name: &str) -> Result<&'a m
     Ok(groups.last_mut().unwrap())
 }
 
-fn append_group_proxy(group: &mut Mapping, name: &str) {
+fn append_group_proxy(group: &mut Value, name: &str) -> Result<()> {
+    let group = group.as_mapping_mut().context("proxy group is not a mapping")?;
     let proxies = group
         .entry(Value::String("proxies".into()))
         .or_insert_with(|| Value::Sequence(Vec::new()));
     let proxies = proxies
         .as_sequence_mut()
-        .expect("proxy group proxies must be a sequence");
+        .context("proxy group proxies must be a sequence")?;
     if !proxies.iter().any(|value| value.as_str() == Some(name)) {
         proxies.push(Value::String(name.into()));
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -597,6 +599,7 @@ mod tests {
     fn state(mode: GroupMode) -> OrchestrationState {
         let node = parse_subscription("moyu", EXTERNAL).unwrap().nodes.remove(0);
         OrchestrationState {
+            sources: vec![],
             active_mode: mode,
             default_mode: mode,
             groups: BTreeMap::from([(
