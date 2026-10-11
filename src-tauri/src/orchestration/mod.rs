@@ -15,6 +15,7 @@ use smartstring::alias::String as SmartString;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::utils::network::{NetworkManager, ProxyType};
+use clash_verge_logging::{Type, logging};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -71,6 +72,12 @@ pub struct SubscriptionSource {
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_agent: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct SourceCache {
+    content: String,
+    fetched_at: i64,
 }
 
 const fn default_true() -> bool {
@@ -145,6 +152,92 @@ pub async fn save_state(profile_uid: &str, state: &OrchestrationState) -> Result
     crate::utils::help::save_yaml(&path, state, Some("# Subscription orchestration state")).await
 }
 
+fn cache_path(profile_uid: &str, source_id: &str) -> Result<std::path::PathBuf> {
+    let profile_uid = profile_uid.trim();
+    let source_id = source_id.trim();
+    if profile_uid.is_empty()
+        || source_id.is_empty()
+        || profile_uid.chars().any(|ch| matches!(ch, '/' | '\\' | ':'))
+        || source_id.chars().any(|ch| matches!(ch, '/' | '\\' | ':'))
+    {
+        bail!("invalid orchestration cache key");
+    }
+    Ok(crate::utils::dirs::app_home_dir()?
+        .join("orchestration")
+        .join("cache")
+        .join(profile_uid)
+        .join(format!("{source_id}.yaml")))
+}
+
+async fn load_source_cache(profile_uid: &str, source_id: &str) -> Result<Option<SourceCache>> {
+    let path = cache_path(profile_uid, source_id)?;
+    match crate::utils::help::read_yaml(&path).await {
+        Ok(cache) => Ok(Some(cache)),
+        Err(error) if error.to_string().contains("file not found") => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+async fn save_source_cache(
+    profile_uid: &str,
+    source: &SubscriptionSource,
+    response: &crate::utils::network::HttpResponse,
+) -> Result<()> {
+    let path = cache_path(profile_uid, &source.source_id)?;
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    let cache = SourceCache {
+        content: response.text().to_owned(),
+        fetched_at: chrono::Utc::now().timestamp(),
+    };
+    crate::utils::help::save_yaml(
+        &path,
+        &cache,
+        Some("# Subscription orchestration cache"),
+    )
+    .await
+}
+
+async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) -> Result<String> {
+    let response = NetworkManager::new()
+        .get(
+            &source.url,
+            ProxyType::Localhost,
+            Some(30),
+            source.user_agent.clone().map(SmartString::from),
+            false,
+        )
+        .await;
+
+    match response {
+        Ok(response) if response.status().is_success() => {
+            let content = response.text().to_owned();
+            save_source_cache(profile_uid, source, &response).await?;
+            Ok(content)
+        }
+        Ok(response) => {
+            let reason = format!("HTTP status {}", response.status());
+            if let Some(cache) = load_source_cache(profile_uid, &source.source_id).await? {
+                logging!(warn, Type::Config, "orchestration source {} unavailable ({reason}); using cached content from {}", source.source_id, cache.fetched_at);
+                Ok(cache.content)
+            } else {
+                bail!("orchestration source {} returned {reason} and has no cache", source.source_id);
+            }
+        }
+        Err(error) => {
+            if let Some(cache) = load_source_cache(profile_uid, &source.source_id).await? {
+                logging!(warn, Type::Config, "orchestration source {} failed ({error:#}); using cached content from {}", source.source_id, cache.fetched_at);
+                Ok(cache.content)
+            } else {
+                Err(error).with_context(|| {
+                    format!("failed to fetch orchestration source {} and no cache is available", source.source_id)
+                })
+            }
+        }
+    }
+}
+
 /// Applies the saved orchestration state to the generated profile configuration.
 ///
 /// The source subscriptions are fetched only when there is an active binding. A failed
@@ -163,24 +256,8 @@ pub async fn apply_to_profile_config(profile_uid: &str, config: &mut Mapping) ->
 
     let mut parsed_sources = Vec::new();
     for source in state.sources.iter().filter(|source| source.enabled) {
-        let response = NetworkManager::new()
-            .get(
-                &source.url,
-                ProxyType::Localhost,
-                Some(30),
-                source.user_agent.clone().map(SmartString::from),
-                false,
-            )
-            .await
-            .with_context(|| format!("failed to fetch orchestration source {}", source.source_id))?;
-        if !response.status().is_success() {
-            bail!(
-                "orchestration source {} returned HTTP status {}",
-                source.source_id,
-                response.status()
-            );
-        }
-        parsed_sources.push(parse_subscription(&source.source_id, response.text())?);
+        let content = fetch_source_content(profile_uid, source).await?;
+        parsed_sources.push(parse_subscription(&source.source_id, &content)?);
     }
 
     let mut value = Value::Mapping(std::mem::take(config));
