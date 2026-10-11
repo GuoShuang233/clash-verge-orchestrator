@@ -78,6 +78,7 @@
       "editRules": "Edit Rules",
       "editProxies": "Edit Proxies",
       "editGroups": "Edit Proxy Groups",
+      "orchestration": "Subscription Orchestration",
       "extendConfig": "Extend Config",
       "extendScript": "Extend Script",
       "openFile": "Open File",

@@ -5,6 +5,16 @@ import dayjs from 'dayjs'
 import type { CommandFailure } from '@/services/notice-service'
 import { showNotice } from '@/services/notice-service'
 import type { ProxyViewV1 } from '@/types/proxy-view'
+import type {
+  OrchestrationNodeSummary,
+  OrchestrationSource,
+  OrchestrationState,
+} from '@/types/orchestration'
+import type {
+  OrchestrationNodeSummary,
+  OrchestrationSource,
+  OrchestrationState,
+} from '@/types/orchestration'
 import { debugLog } from '@/utils/debug'
 
 export async function copyClashEnv() {
@@ -49,6 +59,46 @@ export async function saveProfileFile(index: string, fileData: string) {
       })
     ).status === 'valid'
   )
+}
+
+export async function getOrchestrationState(profileUid: string) {
+  return invoke<OrchestrationState>('get_orchestration_state', { profileUid })
+}
+
+export async function saveOrchestrationState(profileUid: string, state: OrchestrationState) {
+  return invoke<void>('save_orchestration_state', { profileUid, state })
+}
+
+export async function fetchOrchestrationSource(source: OrchestrationSource, useProxy = true) {
+  return invoke<OrchestrationNodeSummary[]>('fetch_orchestration_source', {
+    source,
+    useProxy,
+    timeoutSeconds: 30,
+  })
+}
+
+export async function getOrchestrationState(profileUid: string) {
+  return invoke<OrchestrationState>('get_orchestration_state', {
+    profileUid,
+  })
+}
+
+export async function saveOrchestrationState(
+  profileUid: string,
+  state: OrchestrationState,
+) {
+  return invoke<void>('save_orchestration_state', { profileUid, state })
+}
+
+export async function fetchOrchestrationSource(
+  source: OrchestrationSource,
+  useProxy = true,
+) {
+  return invoke<OrchestrationNodeSummary[]>('fetch_orchestration_source', {
+    source,
+    useProxy,
+    timeoutSeconds: 30,
+  })
 }
 
 export async function importProfile(url: string, option?: IProfileOption) {

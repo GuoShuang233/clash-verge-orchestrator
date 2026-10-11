@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next'
 import { BaseDialog } from '@/components/base'
 import { EditorViewer } from '@/components/profile/editor-viewer'
 import { GroupsEditorViewer } from '@/components/profile/groups-editor-viewer'
+import { OrchestrationEditor } from '@/components/profile/orchestration-editor'
 import { RulesEditorViewer } from '@/components/profile/rules-editor-viewer'
 import { useEditorDocument } from '@/hooks/use-editor-document'
 import {
@@ -288,6 +289,7 @@ const ProfileItemBase = (props: ProfileItemProps) => {
   const [rulesOpen, setRulesOpen] = useState(false)
   const [proxiesOpen, setProxiesOpen] = useState(false)
   const [groupsOpen, setGroupsOpen] = useState(false)
+  const [orchestrationOpen, setOrchestrationOpen] = useState(false)
   const [mergeOpen, setMergeOpen] = useState(false)
   const [scriptOpen, setScriptOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -350,6 +352,11 @@ const ProfileItemBase = (props: ProfileItemProps) => {
   const onEditGroups = () => {
     setAnchorEl(null)
     setGroupsOpen(true)
+  }
+
+  const onEditOrchestration = () => {
+    setAnchorEl(null)
+    setOrchestrationOpen(true)
   }
 
   const onEditMerge = () => {
@@ -429,6 +436,7 @@ const ProfileItemBase = (props: ProfileItemProps) => {
     editRules: 'profiles.components.menu.editRules',
     editProxies: 'profiles.components.menu.editProxies',
     editGroups: 'profiles.components.menu.editGroups',
+    orchestration: 'profiles.components.menu.orchestration',
     extendConfig: 'profiles.components.menu.extendConfig',
     extendScript: 'profiles.components.menu.extendScript',
     openFile: 'profiles.components.menu.openFile',
@@ -481,6 +489,11 @@ const ProfileItemBase = (props: ProfileItemProps) => {
       label: menuLabels.editGroups,
       handler: onEditGroups,
       disabled: !option?.groups,
+    },
+    {
+      label: menuLabels.orchestration,
+      handler: onEditOrchestration,
+      disabled: false,
     },
     {
       label: menuLabels.extendConfig,
@@ -552,6 +565,11 @@ const ProfileItemBase = (props: ProfileItemProps) => {
       label: menuLabels.editGroups,
       handler: onEditGroups,
       disabled: !option?.groups,
+    },
+    {
+      label: menuLabels.orchestration,
+      handler: onEditOrchestration,
+      disabled: false,
     },
     {
       label: menuLabels.extendConfig,
@@ -923,6 +941,13 @@ const ProfileItemBase = (props: ProfileItemProps) => {
           onClose={() => {
             setGroupsOpen(false)
           }}
+        />
+      )}
+      {orchestrationOpen && (
+        <OrchestrationEditor
+          profileUid={uid}
+          open={true}
+          onClose={() => setOrchestrationOpen(false)}
         />
       )}
       {mergeOpen && (

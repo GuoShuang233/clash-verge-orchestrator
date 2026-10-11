@@ -78,6 +78,7 @@
       "editRules": "編輯規則",
       "editProxies": "編輯節點",
       "editGroups": "編輯代理組",
+      "orchestration": "訂閱編排",
       "extendConfig": "擴充覆寫設定",
       "extendScript": "擴充指令碼",
       "openFile": "開啟檔案",
