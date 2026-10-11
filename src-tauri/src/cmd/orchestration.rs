@@ -1,6 +1,9 @@
 use crate::{
     cmd::{CmdResult, coded_error},
-    orchestration::{self, NodeSummary, OrchestrationState, SourceInput, SubscriptionSource},
+    orchestration::{
+        self, NodeSummary, OrchestrationState, SourceContentResult, SourceFetchResult, SourceInput,
+        SubscriptionSource,
+    },
     utils::network::{NetworkManager, ProxyType},
 };
 use smartstring::alias::String as SmartString;
@@ -14,33 +17,44 @@ pub async fn preview_orchestration_source(source_id: String, content: String) ->
 
 #[tauri::command]
 pub async fn fetch_orchestration_source(
+    profile_uid: String,
     source: SubscriptionSource,
     use_proxy: bool,
     timeout_seconds: Option<u64>,
-) -> CmdResult<Vec<NodeSummary>> {
-    let response = NetworkManager::new()
-        .get(
-            &source.url,
-            if use_proxy {
-                ProxyType::Localhost
-            } else {
-                ProxyType::None
-            },
-            timeout_seconds.or(Some(30)),
-            source.user_agent.clone().map(SmartString::from),
-            false,
-        )
-        .await
-        .map_err(|error| coded_error("ORCHESTRATION_SOURCE_FETCH_FAILED", format_args!("{error:#}")))?;
-    if !response.status().is_success() {
-        return Err(coded_error(
-            "ORCHESTRATION_SOURCE_FETCH_FAILED",
-            format_args!("subscription returned HTTP status {}", response.status()),
-        ));
+) -> CmdResult<SourceFetchResult> {
+    let result = if use_proxy {
+        orchestration::fetch_source_content(&profile_uid, &source).await
+    } else {
+        let response = NetworkManager::new()
+            .get(
+                &source.url,
+                ProxyType::None,
+                timeout_seconds.or(Some(30)),
+                source.user_agent.clone().map(SmartString::from),
+                false,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:#}"))?;
+        if !response.status().is_success() {
+            return Err(coded_error(
+                "ORCHESTRATION_SOURCE_FETCH_FAILED",
+                format_args!("subscription returned HTTP status {}", response.status()),
+            ));
+        }
+        Ok(SourceContentResult {
+            content: response.text().to_owned(),
+            used_cache: false,
+            fetched_at: chrono::Utc::now().timestamp(),
+        })
     }
-    let parsed = orchestration::parse_subscription(&source.source_id, response.text())
+    .map_err(|error| coded_error("ORCHESTRATION_SOURCE_FETCH_FAILED", format_args!("{error:#}")))?;
+    let parsed = orchestration::parse_subscription(&source.source_id, &result.content)
         .map_err(|error| coded_error("ORCHESTRATION_SOURCE_PARSE_FAILED", format_args!("{error:#}")))?;
-    Ok(orchestration::node_summaries(&parsed))
+    Ok(SourceFetchResult {
+        nodes: orchestration::node_summaries(&parsed),
+        used_cache: result.used_cache,
+        fetched_at: result.fetched_at,
+    })
 }
 
 #[tauri::command]
