@@ -1,0 +1,29 @@
+name: Orchestration backend check
+
+on:
+  push:
+    branches:
+      - dev
+      - feature/subscription-orchestration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HUSKY: 0
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --manifest-path ./src-tauri/Cargo.toml --all -- --check
+      - name: Check backend
+        run: cargo check --manifest-path ./src-tauri/Cargo.toml --all-features
+      - name: Run orchestration tests
+        run: cargo test --manifest-path ./src-tauri/Cargo.toml --all-features orchestration
