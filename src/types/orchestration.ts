@@ -27,4 +27,3 @@ export interface OrchestrationNodeSummary {
   name: string
   proxy_type: string
 }
-
