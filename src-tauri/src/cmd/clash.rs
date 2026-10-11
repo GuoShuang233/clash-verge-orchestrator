@@ -250,4 +250,3 @@ pub async fn get_clash_logs() -> CmdResult<Vec<std::string::String>> {
     let logs = CoreManager::global().get_clash_logs().await.unwrap_or_default();
     Ok(logs)
 }
-

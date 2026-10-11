@@ -265,8 +265,15 @@ impl NetworkManager {
         user_agent: Option<String>,
         accept_invalid_certs: bool,
     ) -> Result<HttpResponse> {
-        self.get_with_headers(url, proxy_type, timeout_secs, user_agent, accept_invalid_certs, HeaderMap::new())
-            .await
+        self.get_with_headers(
+            url,
+            proxy_type,
+            timeout_secs,
+            user_agent,
+            accept_invalid_certs,
+            HeaderMap::new(),
+        )
+        .await
     }
 
     pub async fn get_with_headers(
