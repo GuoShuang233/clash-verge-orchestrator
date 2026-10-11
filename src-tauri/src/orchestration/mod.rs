@@ -404,14 +404,20 @@ pub fn compile_value(config: &mut Value, sources: &[ParsedSubscription], state: 
         .filter(|binding| binding.mode.unwrap_or(state.active_mode) != GroupMode::Upstream)
     {
         for node_ref in &binding.nodes {
-            if let Some(node) = node_index.get(&(node_ref.source_id.clone(), node_ref.node_id.clone())) {
-                injected.insert(node_ref.name.clone());
-                let mut value = node.value.clone();
-                if let Some(mapping) = value.as_mapping_mut() {
-                    mapping.insert(Value::String("name".into()), Value::String(node_ref.name.clone()));
-                }
-                append_proxy(config_mapping, value)?;
+            let node = node_index
+                .get(&(node_ref.source_id.clone(), node_ref.node_id.clone()))
+                .with_context(|| {
+                    format!(
+                        "orchestration node binding is missing: source={} node={}",
+                        node_ref.source_id, node_ref.node_id
+                    )
+                })?;
+            injected.insert(node_ref.name.clone());
+            let mut value = node.value.clone();
+            if let Some(mapping) = value.as_mapping_mut() {
+                mapping.insert(Value::String("name".into()), Value::String(node_ref.name.clone()));
             }
+            append_proxy(config_mapping, value)?;
         }
     }
 
