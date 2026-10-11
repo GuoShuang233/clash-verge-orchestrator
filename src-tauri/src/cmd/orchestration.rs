@@ -1,8 +1,6 @@
 use crate::{
     cmd::{CmdResult, coded_error},
-    orchestration::{
-        self, NodeSummary, OrchestrationState, SourceContentResult, SourceFetchResult, SourceInput, SubscriptionSource,
-    },
+    orchestration::{self, NodeSummary, OrchestrationState, SourceContentResult, SourceFetchResult, SourceInput, SubscriptionSource},
     utils::network::{NetworkManager, ProxyType},
 };
 use smartstring::alias::String as SmartString;
@@ -22,7 +20,7 @@ pub async fn fetch_orchestration_source(
     timeout_seconds: Option<u64>,
 ) -> CmdResult<SourceFetchResult> {
     let result = if use_proxy {
-        orchestration::fetch_source_content(&profile_uid, &source, timeout_seconds).await
+        orchestration::fetch_source_content(&profile_uid, &source).await
     } else {
         let response = NetworkManager::new()
             .get(
@@ -33,7 +31,7 @@ pub async fn fetch_orchestration_source(
                 false,
             )
             .await
-            .map_err(|error| coded_error("ORCHESTRATION_SOURCE_FETCH_FAILED", format_args!("{error:#}")))?;
+            .map_err(|error| anyhow::anyhow!("{error:#}"))?;
         if !response.status().is_success() {
             return Err(coded_error(
                 "ORCHESTRATION_SOURCE_FETCH_FAILED",
@@ -79,3 +77,4 @@ pub fn preview_orchestration(
     orchestration::compile_config(&main_config, &sources, &state)
         .map_err(|error| coded_error("ORCHESTRATION_COMPILE_FAILED", format_args!("{error:#}")))
 }
+

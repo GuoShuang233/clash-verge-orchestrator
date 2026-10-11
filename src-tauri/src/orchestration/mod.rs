@@ -7,7 +7,6 @@
 use anyhow::{Context as _, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use percent_encoding::percent_decode_str;
-use reqwest::{header::{ETAG, HeaderMap, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED}};
 use reqwest_dav::re_exports::url::Url;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -81,10 +80,6 @@ pub struct SubscriptionSource {
 struct SourceCache {
     content: String,
     fetched_at: i64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    etag: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    last_modified: Option<String>,
 }
 
 const fn default_true() -> bool {
@@ -212,47 +207,23 @@ async fn save_source_cache(
     let cache = SourceCache {
         content: response.text().to_owned(),
         fetched_at,
-        etag: response.headers().get(ETAG).and_then(|value| value.to_str().ok()).map(str::to_owned),
-        last_modified: response
-            .headers()
-            .get(LAST_MODIFIED)
-            .and_then(|value| value.to_str().ok())
-            .map(str::to_owned),
     };
     crate::utils::help::save_yaml(&path, &cache, Some("# Subscription orchestration cache")).await?;
     Ok(fetched_at)
 }
 
-pub async fn fetch_source_content(
-    profile_uid: &str,
-    source: &SubscriptionSource,
-    timeout_seconds: Option<u64>,
-) -> Result<SourceContentResult> {
-    let cache = load_source_cache(profile_uid, &source.source_id).await?;
-    let mut request_headers = HeaderMap::new();
-    if let Some(value) = cache.as_ref().and_then(|cache| cache.etag.as_deref()) {
-        request_headers.insert(IF_NONE_MATCH, value.parse()?);
-    }
-    if let Some(value) = cache.as_ref().and_then(|cache| cache.last_modified.as_deref()) {
-        request_headers.insert(IF_MODIFIED_SINCE, value.parse()?);
-    }
+pub async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) -> Result<SourceContentResult> {
     let response = NetworkManager::new()
-        .get_with_headers(
+        .get(
             &source.url,
             ProxyType::Localhost,
-            timeout_seconds.or(Some(30)),
+            Some(30),
             source.user_agent.clone().map(SmartString::from),
             false,
-            request_headers,
         )
         .await;
 
     match response {
-        Ok(response) if response.status() == reqwest::StatusCode::NOT_MODIFIED => {
-            let cache = cache.context("subscription returned 304 but no cache is available")?;
-            logging!(info, Type::Config, "orchestration source {} unchanged since {}", source.source_id, cache.fetched_at);
-            Ok(SourceContentResult { content: cache.content, used_cache: true, fetched_at: cache.fetched_at })
-        }
         Ok(response) if response.status().is_success() => {
             let content = response.text().to_owned();
             let fetched_at = save_source_cache(profile_uid, source, &response).await?;
@@ -264,7 +235,7 @@ pub async fn fetch_source_content(
         }
         Ok(response) => {
             let reason = format!("HTTP status {}", response.status());
-            if let Some(cache) = cache {
+            if let Some(cache) = load_source_cache(profile_uid, &source.source_id).await? {
                 logging!(
                     warn,
                     Type::Config,
@@ -328,7 +299,7 @@ pub async fn apply_to_profile_config(profile_uid: &str, config: &mut Mapping) ->
 
     let mut parsed_sources = Vec::new();
     for source in state.sources.iter().filter(|source| source.enabled) {
-        let fetched = fetch_source_content(profile_uid, source, Some(30)).await?;
+        let fetched = fetch_source_content(profile_uid, source).await?;
         parsed_sources.push(parse_subscription(&source.source_id, &fetched.content)?);
     }
 
@@ -398,17 +369,10 @@ pub fn parse_subscription(source_id: &str, content: &str) -> Result<ParsedSubscr
 }
 
 pub fn stable_node_id(source_id: &str, node: &Value) -> Result<String> {
-    let identity = if let Some(mapping) = node.as_mapping() {
-        let mut mapping = mapping.clone();
-        mapping.remove(Value::String("name".into()));
-        Value::Mapping(mapping)
-    } else {
-        node.clone()
-    };
     let mut digest = Sha256::new();
     digest.update(source_id.as_bytes());
     digest.update([0]);
-    digest.update(serde_yaml_ng::to_string(&identity)?);
+    digest.update(serde_yaml_ng::to_string(node)?);
     Ok(digest.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
@@ -436,20 +400,14 @@ pub fn compile_value(config: &mut Value, sources: &[ParsedSubscription], state: 
         .filter(|binding| binding.mode.unwrap_or(state.active_mode) != GroupMode::Upstream)
     {
         for node_ref in &binding.nodes {
-            let node = node_index
-                .get(&(node_ref.source_id.clone(), node_ref.node_id.clone()))
-                .with_context(|| {
-                    format!(
-                        "orchestration node binding is missing: source={} node={}",
-                        node_ref.source_id, node_ref.node_id
-                    )
-                })?;
-            injected.insert(node_ref.name.clone());
-            let mut value = node.value.clone();
-            if let Some(mapping) = value.as_mapping_mut() {
-                mapping.insert(Value::String("name".into()), Value::String(node_ref.name.clone()));
+            if let Some(node) = node_index.get(&(node_ref.source_id.clone(), node_ref.node_id.clone())) {
+                injected.insert(node_ref.name.clone());
+                let mut value = node.value.clone();
+                if let Some(mapping) = value.as_mapping_mut() {
+                    mapping.insert(Value::String("name".into()), Value::String(node_ref.name.clone()));
+                }
+                append_proxy(config_mapping, value)?;
             }
-            append_proxy(config_mapping, value)?;
         }
     }
 
@@ -846,33 +804,6 @@ mod tests {
     }
 
     #[test]
-    fn node_id_ignores_display_name_changes() {
-        let first = parse_subscription(
-            "moyu",
-            "proxies:
-  - name: first
-    type: vless
-    server: example.test
-    port: 443
-    uuid: test
-",
-        )
-        .unwrap();
-        let second = parse_subscription(
-            "moyu",
-            "proxies:
-  - name: renamed
-    type: vless
-    server: example.test
-    port: 443
-    uuid: test
-",
-        )
-        .unwrap();
-        assert_eq!(first.nodes[0].node_id, second.nodes[0].node_id);
-    }
-
-    #[test]
     fn parses_yaml_and_keeps_protocol_fields() {
         let parsed = parse_subscription("moyu", EXTERNAL).unwrap();
         assert_eq!(parsed.nodes.len(), 1);
@@ -973,3 +904,4 @@ mod tests {
         );
     }
 }
+
