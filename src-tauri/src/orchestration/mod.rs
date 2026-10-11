@@ -373,10 +373,17 @@ pub fn parse_subscription(source_id: &str, content: &str) -> Result<ParsedSubscr
 }
 
 pub fn stable_node_id(source_id: &str, node: &Value) -> Result<String> {
+    let identity = if let Some(mapping) = node.as_mapping() {
+        let mut mapping = mapping.clone();
+        mapping.remove(Value::String("name".into()));
+        Value::Mapping(mapping)
+    } else {
+        node.clone()
+    };
     let mut digest = Sha256::new();
     digest.update(source_id.as_bytes());
     digest.update([0]);
-    digest.update(serde_yaml_ng::to_string(node)?);
+    digest.update(serde_yaml_ng::to_string(&identity)?);
     Ok(digest.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
@@ -811,6 +818,33 @@ mod tests {
                 },
             )]),
         }
+    }
+
+    #[test]
+    fn node_id_ignores_display_name_changes() {
+        let first = parse_subscription(
+            "moyu",
+            "proxies:
+  - name: first
+    type: vless
+    server: example.test
+    port: 443
+    uuid: test
+",
+        )
+        .unwrap();
+        let second = parse_subscription(
+            "moyu",
+            "proxies:
+  - name: renamed
+    type: vless
+    server: example.test
+    port: 443
+    uuid: test
+",
+        )
+        .unwrap();
+        assert_eq!(first.nodes[0].node_id, second.nodes[0].node_id);
     }
 
     #[test]
