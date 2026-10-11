@@ -57,7 +57,7 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
 
   const addSource = () => {
     const url = sourceUrl.trim()
-    if (!/^https?:\\/\\//i.test(url)) { showNotice.error('The source URL must start with http:// or https://'); return }
+    if (!/^https?:\/\//i.test(url)) { showNotice.error('The source URL must start with http:// or https://'); return }
     const source: OrchestrationSource = { source_id: newSourceId(), name: sourceName.trim() || 'External subscription', url, enabled: true }
     setState((current) => ({ ...current, sources: [...current.sources, source] }))
     setSelectedSource(source.source_id)
