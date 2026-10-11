@@ -7,7 +7,7 @@
 use anyhow::{Context as _, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use percent_encoding::percent_decode_str;
-use reqwest::{HeaderMap, header::{ETAG, IF_NONE_MATCH, IF_MODIFIED_SINCE, LAST_MODIFIED}};
+use reqwest::{header::{ETAG, HeaderMap, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED}};
 use reqwest_dav::re_exports::url::Url;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
