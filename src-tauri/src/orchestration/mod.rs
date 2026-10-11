@@ -152,9 +152,11 @@ pub async fn save_state(profile_uid: &str, state: &OrchestrationState) -> Result
 /// last valid upstream configuration instead of replacing it with a partial result.
 pub async fn apply_to_profile_config(profile_uid: &str, config: &mut Mapping) -> Result<()> {
     let state = load_state(profile_uid).await?;
-    if state.active_mode == GroupMode::Upstream && !state.groups.values().any(|binding| {
-        binding.mode.is_some_and(|mode| mode != GroupMode::Upstream) && !binding.nodes.is_empty()
-    }) {
+    if state.active_mode == GroupMode::Upstream
+        && !state.groups.values().any(|binding| {
+            binding.mode.is_some_and(|mode| mode != GroupMode::Upstream) && !binding.nodes.is_empty()
+        })
+    {
         return Ok(());
     }
 
