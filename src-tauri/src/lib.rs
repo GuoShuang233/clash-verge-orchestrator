@@ -8,6 +8,7 @@ mod core;
 mod enhance;
 mod feat;
 mod process;
+pub mod orchestration;
 pub mod utils;
 
 use crate::constants::files;
@@ -220,6 +221,7 @@ mod app_init {
             cmd::get_unlock_items,
             cmd::check_media_unlock,
             cmd::check_media_unlock_item,
+            cmd::preview_orchestration,
         ]
     }
 }
