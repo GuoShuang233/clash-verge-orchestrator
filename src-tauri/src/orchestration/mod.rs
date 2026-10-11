@@ -6,12 +6,12 @@
 
 use anyhow::{Context as _, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use percent_encoding::percent_decode_str;
+use reqwest_dav::re_exports::url::Url;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use sha2::{Digest as _, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use percent_encoding::percent_decode_str;
-use reqwest_dav::re_exports::url::Url;
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -193,18 +193,10 @@ pub fn stable_node_id(source_id: &str, node: &Value) -> Result<String> {
     digest.update(source_id.as_bytes());
     digest.update([0]);
     digest.update(serde_yaml_ng::to_string(node)?);
-    Ok(digest
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect())
+    Ok(digest.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
-pub fn compile_config(
-    main_config: &str,
-    sources: &[SourceInput],
-    state: &OrchestrationState,
-) -> Result<String> {
+pub fn compile_config(main_config: &str, sources: &[SourceInput], state: &OrchestrationState) -> Result<String> {
     let mut config: Value = serde_yaml_ng::from_str(main_config).context("main profile is not valid YAML")?;
     let parsed = sources
         .iter()
@@ -214,11 +206,7 @@ pub fn compile_config(
     crate::utils::yaml_emitter::to_mihomo_config_string(&config).context("failed to serialize generated config")
 }
 
-pub fn compile_value(
-    config: &mut Value,
-    sources: &[ParsedSubscription],
-    state: &OrchestrationState,
-) -> Result<()> {
+pub fn compile_value(config: &mut Value, sources: &[ParsedSubscription], state: &OrchestrationState) -> Result<()> {
     let config_mapping = config.as_mapping_mut().context("main profile is not a YAML mapping")?;
     if state.active_mode == GroupMode::Upstream {
         return Ok(());
@@ -226,7 +214,11 @@ pub fn compile_value(
     let node_index = build_node_index(sources);
     let mut injected = BTreeSet::new();
 
-    for binding in state.groups.values().filter(|binding| binding.mode.unwrap_or(state.active_mode) != GroupMode::Upstream) {
+    for binding in state
+        .groups
+        .values()
+        .filter(|binding| binding.mode.unwrap_or(state.active_mode) != GroupMode::Upstream)
+    {
         for node_ref in &binding.nodes {
             if let Some(node) = node_index.get(&(node_ref.source_id.clone(), node_ref.node_id.clone())) {
                 injected.insert(node_ref.name.clone());
@@ -257,7 +249,10 @@ pub fn compile_value(
                 }
             }
             GroupMode::Custom => {
-                let custom = binding.custom.as_ref().context("custom group mode requires a custom group")?;
+                let custom = binding
+                    .custom
+                    .as_ref()
+                    .context("custom group mode requires a custom group")?;
                 *group = custom.clone();
                 let group = group.as_mapping_mut().context("custom proxy group is not a mapping")?;
                 for node_ref in &binding.nodes {
@@ -316,12 +311,16 @@ fn normalize_yaml_value(value: Value) -> Result<Value> {
 }
 
 fn looks_like_uri_list(content: &str) -> bool {
-    content.lines().map(str::trim).filter(|line| !line.is_empty()).all(|line| {
-        line.starts_with("vless://")
-            || line.starts_with("vmess://")
-            || line.starts_with("trojan://")
-            || line.starts_with("ss://")
-    })
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .all(|line| {
+            line.starts_with("vless://")
+                || line.starts_with("vmess://")
+                || line.starts_with("trojan://")
+                || line.starts_with("ss://")
+        })
 }
 
 fn parse_uri_list(content: &str) -> Result<Value> {
@@ -358,7 +357,9 @@ fn uri_name(url: &Url, fallback: &str) -> String {
 }
 
 fn query_value(url: &Url, key: &str) -> Option<String> {
-    url.query_pairs().find(|(name, _)| name == key).map(|(_, value)| value.into_owned())
+    url.query_pairs()
+        .find(|(name, _)| name == key)
+        .map(|(_, value)| value.into_owned())
 }
 
 fn required_host_port(url: &Url) -> Result<(String, u16)> {
@@ -374,7 +375,7 @@ fn parse_vless_uri(url: &Url) -> Result<Value> {
         bail!("VLESS URI has no UUID");
     }
     let mut node = Mapping::new();
-    node.insert("name".into(), uri_name(url, "VLESS" ).into());
+    node.insert("name".into(), uri_name(url, "VLESS").into());
     node.insert("type".into(), "vless".into());
     node.insert("server".into(), server.into());
     node.insert("port".into(), port.into());
@@ -422,20 +423,60 @@ fn parse_vmess_uri(url: &Url) -> Result<Value> {
     let json: serde_json::Value = serde_json::from_slice(&decoded).context("VMess URI payload is not JSON")?;
     let object = json.as_object().context("VMess URI payload is not an object")?;
     let mut node = Mapping::new();
-    node.insert("name".into(), object.get("ps").and_then(serde_json::Value::as_str).unwrap_or("VMess").into());
+    node.insert(
+        "name".into(),
+        object
+            .get("ps")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("VMess")
+            .into(),
+    );
     node.insert("type".into(), "vmess".into());
-    node.insert("server".into(), object.get("add").and_then(serde_json::Value::as_str).context("VMess has no server")?.into());
-    node.insert("port".into(), object.get("port").map(json_to_yaml).context("VMess has no port")?);
-    node.insert("uuid".into(), object.get("id").and_then(serde_json::Value::as_str).context("VMess has no UUID")?.into());
-    if let Some(value) = object.get("aid").map(json_to_yaml) { node.insert("alterId".into(), value); }
-    if let Some(value) = object.get("scy").map(json_to_yaml) { node.insert("cipher".into(), value); }
-    if object.get("tls").and_then(serde_json::Value::as_str).is_some_and(|value| !value.is_empty()) { node.insert("tls".into(), true.into()); }
+    node.insert(
+        "server".into(),
+        object
+            .get("add")
+            .and_then(serde_json::Value::as_str)
+            .context("VMess has no server")?
+            .into(),
+    );
+    node.insert(
+        "port".into(),
+        object.get("port").map(json_to_yaml).context("VMess has no port")?,
+    );
+    node.insert(
+        "uuid".into(),
+        object
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .context("VMess has no UUID")?
+            .into(),
+    );
+    if let Some(value) = object.get("aid").map(json_to_yaml) {
+        node.insert("alterId".into(), value);
+    }
+    if let Some(value) = object.get("scy").map(json_to_yaml) {
+        node.insert("cipher".into(), value);
+    }
+    if object
+        .get("tls")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|value| !value.is_empty())
+    {
+        node.insert("tls".into(), true.into());
+    }
     if let Some(network) = object.get("net").and_then(serde_json::Value::as_str) {
         node.insert("network".into(), network.into());
         if network == "ws" {
             let mut ws = Mapping::new();
-            if let Some(path) = object.get("path").and_then(serde_json::Value::as_str) { ws.insert("path".into(), path.into()); }
-            if let Some(host) = object.get("host").and_then(serde_json::Value::as_str) { let mut headers = Mapping::new(); headers.insert("Host".into(), host.into()); ws.insert("headers".into(), headers.into()); }
+            if let Some(path) = object.get("path").and_then(serde_json::Value::as_str) {
+                ws.insert("path".into(), path.into());
+            }
+            if let Some(host) = object.get("host").and_then(serde_json::Value::as_str) {
+                let mut headers = Mapping::new();
+                headers.insert("Host".into(), host.into());
+                ws.insert("headers".into(), headers.into());
+            }
             node.insert("ws-opts".into(), ws.into());
         }
     }
@@ -451,8 +492,12 @@ fn parse_trojan_uri(url: &Url) -> Result<Value> {
     node.insert("server".into(), server.into());
     node.insert("port".into(), port.into());
     node.insert("password".into(), password.into());
-    if query_value(url, "security").as_deref() == Some("tls") || query_value(url, "tls").as_deref() == Some("1") { node.insert("tls".into(), true.into()); }
-    if let Some(sni) = query_value(url, "sni") { node.insert("sni".into(), sni.into()); }
+    if query_value(url, "security").as_deref() == Some("tls") || query_value(url, "tls").as_deref() == Some("1") {
+        node.insert("tls".into(), true.into());
+    }
+    if let Some(sni) = query_value(url, "sni") {
+        node.insert("sni".into(), sni.into());
+    }
     Ok(node.into())
 }
 
@@ -472,8 +517,14 @@ fn parse_ss_uri(url: &Url) -> Result<Value> {
     node.insert("type".into(), "ss".into());
     node.insert("server".into(), server.into());
     node.insert("port".into(), port.into());
-    node.insert("cipher".into(), percent_decode_str(cipher).decode_utf8_lossy().into_owned().into());
-    node.insert("password".into(), percent_decode_str(password).decode_utf8_lossy().into_owned().into());
+    node.insert(
+        "cipher".into(),
+        percent_decode_str(cipher).decode_utf8_lossy().into_owned().into(),
+    );
+    node.insert(
+        "password".into(),
+        percent_decode_str(password).decode_utf8_lossy().into_owned().into(),
+    );
     Ok(node.into())
 }
 
@@ -509,7 +560,10 @@ fn find_or_create_group<'a>(config: &'a mut Mapping, name: &str) -> Result<&'a m
     let groups = groups
         .as_sequence_mut()
         .context("main profile proxy-groups is not a sequence")?;
-    if let Some(index) = groups.iter().position(|group| group.get("name").and_then(Value::as_str) == Some(name)) {
+    if let Some(index) = groups
+        .iter()
+        .position(|group| group.get("name").and_then(Value::as_str) == Some(name))
+    {
         return Ok(&mut groups[index]);
     }
     let mut group = Mapping::new();
@@ -524,7 +578,9 @@ fn append_group_proxy(group: &mut Mapping, name: &str) {
     let proxies = group
         .entry(Value::String("proxies".into()))
         .or_insert_with(|| Value::Sequence(Vec::new()));
-    let proxies = proxies.as_sequence_mut().expect("proxy group proxies must be a sequence");
+    let proxies = proxies
+        .as_sequence_mut()
+        .expect("proxy group proxies must be a sequence");
     if !proxies.iter().any(|value| value.as_str() == Some(name)) {
         proxies.push(Value::String(name.into()));
     }
@@ -553,7 +609,8 @@ mod tests {
                         node_id: node.node_id,
                         name: "[Moyu] moyu-node".into(),
                     }],
-                    custom: (mode == GroupMode::Custom).then(|| serde_yaml_ng::from_str("{name: US, type: select, proxies: [ytoo-us]}").unwrap()),
+                    custom: (mode == GroupMode::Custom)
+                        .then(|| serde_yaml_ng::from_str("{name: US, type: select, proxies: [ytoo-us]}").unwrap()),
                 },
             )]),
         }
@@ -569,14 +626,30 @@ mod tests {
 
     #[test]
     fn hybrid_mode_appends_external_node_to_upstream_group() {
-        let output = compile_config(MAIN, &[SourceInput { source_id: "moyu".into(), content: EXTERNAL.into() }], &state(GroupMode::Hybrid)).unwrap();
+        let output = compile_config(
+            MAIN,
+            &[SourceInput {
+                source_id: "moyu".into(),
+                content: EXTERNAL.into(),
+            }],
+            &state(GroupMode::Hybrid),
+        )
+        .unwrap();
         assert!(output.contains("[Moyu] moyu-node"));
         assert!(output.contains("name: US"));
     }
 
     #[test]
     fn custom_mode_replaces_group_shape_but_keeps_bound_nodes() {
-        let output = compile_config(MAIN, &[SourceInput { source_id: "moyu".into(), content: EXTERNAL.into() }], &state(GroupMode::Custom)).unwrap();
+        let output = compile_config(
+            MAIN,
+            &[SourceInput {
+                source_id: "moyu".into(),
+                content: EXTERNAL.into(),
+            }],
+            &state(GroupMode::Custom),
+        )
+        .unwrap();
         assert!(output.contains("type: select"));
         assert!(output.contains("[Moyu] moyu-node"));
     }
@@ -592,8 +665,19 @@ mod tests {
         assert_eq!(node.get("type").and_then(Value::as_str), Some("vless"));
         assert_eq!(node.get("servername").and_then(Value::as_str), Some("example.test"));
         assert_eq!(node.get("client-fingerprint").and_then(Value::as_str), Some("chrome"));
-        assert_eq!(node.get("ws-opts").and_then(|value| value.get("path")).and_then(Value::as_str), Some("/ws/"));
-        assert_eq!(node.get("ws-opts").and_then(|value| value.get("headers")).and_then(|value| value.get("Host")).and_then(Value::as_str), Some("cdn.example.test"));
+        assert_eq!(
+            node.get("ws-opts")
+                .and_then(|value| value.get("path"))
+                .and_then(Value::as_str),
+            Some("/ws/")
+        );
+        assert_eq!(
+            node.get("ws-opts")
+                .and_then(|value| value.get("headers"))
+                .and_then(|value| value.get("Host"))
+                .and_then(Value::as_str),
+            Some("cdn.example.test")
+        );
         assert_eq!(node.get("name").and_then(Value::as_str), Some("Moyu WS"));
     }
 
@@ -625,6 +709,11 @@ mod tests {
         let node = &parsed.nodes[0].value;
         assert_eq!(node.get("type").and_then(Value::as_str), Some("vmess"));
         assert_eq!(node.get("network").and_then(Value::as_str), Some("ws"));
-        assert_eq!(node.get("ws-opts").and_then(|value| value.get("path")).and_then(Value::as_str), Some("/vmess/"));
+        assert_eq!(
+            node.get("ws-opts")
+                .and_then(|value| value.get("path"))
+                .and_then(Value::as_str),
+            Some("/vmess/")
+        );
     }
 }

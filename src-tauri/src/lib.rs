@@ -7,8 +7,8 @@ mod constants;
 mod core;
 mod enhance;
 mod feat;
-mod process;
 pub mod orchestration;
+mod process;
 pub mod utils;
 
 use crate::constants::files;

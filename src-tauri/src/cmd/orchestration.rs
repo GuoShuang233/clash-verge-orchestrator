@@ -20,7 +20,11 @@ pub async fn fetch_orchestration_source(
     let response = NetworkManager::new()
         .get(
             &source.url,
-            if use_proxy { ProxyType::Localhost } else { ProxyType::None },
+            if use_proxy {
+                ProxyType::Localhost
+            } else {
+                ProxyType::None
+            },
             timeout_seconds.or(Some(30)),
             source.user_agent.clone(),
             false,
