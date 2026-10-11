@@ -222,6 +222,10 @@ mod app_init {
             cmd::check_media_unlock,
             cmd::check_media_unlock_item,
             cmd::preview_orchestration,
+            cmd::get_orchestration_state,
+            cmd::save_orchestration_state,
+            cmd::preview_orchestration_source,
+            cmd::fetch_orchestration_source,
         ]
     }
 }
