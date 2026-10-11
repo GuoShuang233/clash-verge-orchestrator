@@ -191,12 +191,7 @@ async fn save_source_cache(
         content: response.text().to_owned(),
         fetched_at: chrono::Utc::now().timestamp(),
     };
-    crate::utils::help::save_yaml(
-        &path,
-        &cache,
-        Some("# Subscription orchestration cache"),
-    )
-    .await
+    crate::utils::help::save_yaml(&path, &cache, Some("# Subscription orchestration cache")).await
 }
 
 async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) -> Result<String> {
@@ -219,19 +214,37 @@ async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) ->
         Ok(response) => {
             let reason = format!("HTTP status {}", response.status());
             if let Some(cache) = load_source_cache(profile_uid, &source.source_id).await? {
-                logging!(warn, Type::Config, "orchestration source {} unavailable ({reason}); using cached content from {}", source.source_id, cache.fetched_at);
+                logging!(
+                    warn,
+                    Type::Config,
+                    "orchestration source {} unavailable ({reason}); using cached content from {}",
+                    source.source_id,
+                    cache.fetched_at
+                );
                 Ok(cache.content)
             } else {
-                bail!("orchestration source {} returned {reason} and has no cache", source.source_id);
+                bail!(
+                    "orchestration source {} returned {reason} and has no cache",
+                    source.source_id
+                );
             }
         }
         Err(error) => {
             if let Some(cache) = load_source_cache(profile_uid, &source.source_id).await? {
-                logging!(warn, Type::Config, "orchestration source {} failed ({error:#}); using cached content from {}", source.source_id, cache.fetched_at);
+                logging!(
+                    warn,
+                    Type::Config,
+                    "orchestration source {} failed ({error:#}); using cached content from {}",
+                    source.source_id,
+                    cache.fetched_at
+                );
                 Ok(cache.content)
             } else {
                 Err(error).with_context(|| {
-                    format!("failed to fetch orchestration source {} and no cache is available", source.source_id)
+                    format!(
+                        "failed to fetch orchestration source {} and no cache is available",
+                        source.source_id
+                    )
                 })
             }
         }
