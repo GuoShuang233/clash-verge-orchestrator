@@ -1,0 +1,13 @@
+This project is a modified version of Clash Verge Rev.
+
+Upstream project: Clash Verge Rev
+Upstream repository: https://github.com/clash-verge-rev/clash-verge-rev
+Upstream license: GNU General Public License v3.0 or later
+Upstream baseline: 84312a5cd171b338663c347d3182bd162306801f
+
+Local changes in this fork are licensed under the GNU General Public License
+version 3.0 or later, unless a file states otherwise. Copyright and license
+notices for upstream and third-party components remain applicable.
+
+This repository is an independent fork and is not an official Clash Verge Rev
+release.
