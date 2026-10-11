@@ -20,7 +20,12 @@ import { closeAllConnections } from 'tauri-plugin-mihomo-api'
 import { BaseDialog, DialogRef } from '@/components/base'
 import { useClash, useClashInfo } from '@/hooks/use-clash'
 import { useVerge } from '@/hooks/use-verge'
-import { changeClashCore, restartCore, upgradeClashCore } from '@/services/cmds'
+import {
+  changeClashCore,
+  listManagedCores,
+  restartCore,
+  upgradeClashCore,
+} from '@/services/cmds'
 import { mutate } from '@/services/mutate'
 import { showNotice } from '@/services/notice-service'
 
@@ -48,9 +53,17 @@ export function ClashCoreViewer({ ref }: { ref?: Ref<DialogRef> }) {
   const [upgrading, setUpgrading] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [changingCore, setChangingCore] = useState<string | null>(null)
+  const [managedCores, setManagedCores] = useState<
+    Awaited<ReturnType<typeof listManagedCores>>
+  >([])
 
   useImperativeHandle(ref, () => ({
-    open: () => setOpen(true),
+    open: () => {
+      setOpen(true)
+      void listManagedCores()
+        .then(setManagedCores)
+        .catch(() => setManagedCores([]))
+    },
     close: () => setOpen(false),
   }))
 
@@ -171,7 +184,14 @@ export function ClashCoreViewer({ ref }: { ref?: Ref<DialogRef> }) {
       onCancel={() => setOpen(false)}
     >
       <List component="nav">
-        {VALID_CORE.map((each) => (
+        {(managedCores.length > 0
+          ? managedCores.map((each) => ({
+              name: each.display_name,
+              core: each.id,
+              chipKey: each.verified ? 'Verified' : 'Unverified',
+            }))
+          : VALID_CORE
+        ).map((each) => (
           <ListItemButton
             key={each.core}
             selected={each.core === clash_core}
@@ -190,3 +210,4 @@ export function ClashCoreViewer({ ref }: { ref?: Ref<DialogRef> }) {
     </BaseDialog>
   )
 }
+

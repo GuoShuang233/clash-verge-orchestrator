@@ -103,6 +103,18 @@ pub async fn upgrade_clash_core(force: bool) -> CmdResult<feat::CoreUpgradeRepor
 }
 
 #[tauri::command]
+pub async fn list_managed_cores() -> CmdResult<Vec<feat::ManagedCore>> {
+    feat::list_managed_cores().await.with_error_code("CORE_REGISTRY_READ_FAILED")
+}
+
+#[tauri::command]
+pub async fn activate_managed_core(core_id: String) -> CmdResult<()> {
+    feat::activate_managed_core(&core_id)
+        .await
+        .with_error_code("CORE_VALIDATION_FAILED")
+}
+
+#[tauri::command]
 pub async fn test_delay(url: String) -> CmdResult<u32> {
     let result = match feat::test_delay(url).await {
         Ok(delay) => delay,
@@ -236,3 +248,4 @@ pub async fn get_clash_logs() -> CmdResult<Vec<std::string::String>> {
     let logs = CoreManager::global().get_clash_logs().await.unwrap_or_default();
     Ok(logs)
 }
+

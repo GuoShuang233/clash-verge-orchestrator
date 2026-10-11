@@ -147,6 +147,8 @@ mod app_init {
             cmd::cancel_update_download,
             cmd::restart_core,
             cmd::upgrade_clash_core,
+            cmd::list_managed_cores,
+            cmd::activate_managed_core,
             cmd::get_runtime_state,
             cmd::get_pending_failures,
             cmd::get_sidecar_failure,
@@ -559,3 +561,4 @@ mod startup_tests {
         assert!(reported.get());
     }
 }
+

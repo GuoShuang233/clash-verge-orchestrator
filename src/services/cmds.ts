@@ -313,6 +313,29 @@ export async function upgradeClashCore(force = false) {
   return invoke<CoreUpgradeReport>('upgrade_clash_core', { force })
 }
 
+export interface ManagedCore {
+  id: string
+  display_name: string
+  kind: 'mihomo' | 'mihomoalpha'
+  executable_name: string
+  path: string
+  installed: boolean
+  installed_version?: string
+  active: boolean
+  verified: boolean
+  last_verified_at?: number
+  can_update: boolean
+  can_remove: boolean
+}
+
+export async function listManagedCores() {
+  return invoke<ManagedCore[]>('list_managed_cores')
+}
+
+export async function activateManagedCore(coreId: string) {
+  return invoke<void>('activate_managed_core', { coreId })
+}
+
 export async function restartApp() {
   return invoke<void>('restart_app')
 }
