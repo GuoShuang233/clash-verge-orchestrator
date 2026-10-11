@@ -11,7 +11,10 @@ use reqwest_dav::re_exports::url::Url;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
 use sha2::{Digest as _, Sha256};
+use smartstring::alias::String as SmartString;
 use std::collections::{BTreeMap, BTreeSet};
+
+use crate::utils::network::{NetworkManager, ProxyType};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -140,6 +143,50 @@ pub async fn save_state(profile_uid: &str, state: &OrchestrationState) -> Result
         tokio::fs::create_dir_all(parent).await?;
     }
     crate::utils::help::save_yaml(&path, state, Some("# Subscription orchestration state")).await
+}
+
+/// Applies the saved orchestration state to the generated profile configuration.
+///
+/// The source subscriptions are fetched only when there is an active binding. A failed
+/// external source is returned to the caller so the runtime generation layer can keep the
+/// last valid upstream configuration instead of replacing it with a partial result.
+pub async fn apply_to_profile_config(profile_uid: &str, config: &mut Mapping) -> Result<()> {
+    let state = load_state(profile_uid).await?;
+    if state.active_mode == GroupMode::Upstream && !state.groups.values().any(|binding| {
+        binding.mode.is_some_and(|mode| mode != GroupMode::Upstream) && !binding.nodes.is_empty()
+    }) {
+        return Ok(());
+    }
+
+    let mut parsed_sources = Vec::new();
+    for source in state.sources.iter().filter(|source| source.enabled) {
+        let response = NetworkManager::new()
+            .get(
+                &source.url,
+                ProxyType::Localhost,
+                Some(30),
+                source.user_agent.clone().map(SmartString::from),
+                false,
+            )
+            .await
+            .with_context(|| format!("failed to fetch orchestration source {}", source.source_id))?;
+        if !response.status().is_success() {
+            bail!(
+                "orchestration source {} returned HTTP status {}",
+                source.source_id,
+                response.status()
+            );
+        }
+        parsed_sources.push(parse_subscription(&source.source_id, response.text())?);
+    }
+
+    let mut value = Value::Mapping(std::mem::take(config));
+    compile_value(&mut value, &parsed_sources, &state)?;
+    *config = value
+        .as_mapping()
+        .cloned()
+        .context("generated orchestration config is not a mapping")?;
+    Ok(())
 }
 
 pub fn parse_subscription(source_id: &str, content: &str) -> Result<ParsedSubscription> {
