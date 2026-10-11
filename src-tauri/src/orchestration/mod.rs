@@ -15,6 +15,8 @@ use smartstring::alias::String as SmartString;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::utils::network::{NetworkManager, ProxyType};
+use crate::core::validate::CoreConfigValidator;
+use crate::utils::yaml_emitter::to_mihomo_config_string;
 use clash_verge_logging::{Type, logging};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, PartialEq, Eq)]
@@ -100,6 +102,20 @@ pub struct NodeSummary {
     pub proxy_type: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct SourceFetchResult {
+    pub nodes: Vec<NodeSummary>,
+    pub used_cache: bool,
+    pub fetched_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceContentResult {
+    pub content: String,
+    pub used_cache: bool,
+    pub fetched_at: i64,
+}
+
 pub fn node_summaries(parsed: &ParsedSubscription) -> Vec<NodeSummary> {
     parsed
         .nodes
@@ -182,19 +198,21 @@ async fn save_source_cache(
     profile_uid: &str,
     source: &SubscriptionSource,
     response: &crate::utils::network::HttpResponse,
-) -> Result<()> {
+) -> Result<i64> {
     let path = cache_path(profile_uid, &source.source_id)?;
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
+    let fetched_at = chrono::Utc::now().timestamp();
     let cache = SourceCache {
         content: response.text().to_owned(),
-        fetched_at: chrono::Utc::now().timestamp(),
+        fetched_at,
     };
-    crate::utils::help::save_yaml(&path, &cache, Some("# Subscription orchestration cache")).await
+    crate::utils::help::save_yaml(&path, &cache, Some("# Subscription orchestration cache")).await?;
+    Ok(fetched_at)
 }
 
-async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) -> Result<String> {
+pub async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) -> Result<SourceContentResult> {
     let response = NetworkManager::new()
         .get(
             &source.url,
@@ -208,8 +226,12 @@ async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) ->
     match response {
         Ok(response) if response.status().is_success() => {
             let content = response.text().to_owned();
-            save_source_cache(profile_uid, source, &response).await?;
-            Ok(content)
+            let fetched_at = save_source_cache(profile_uid, source, &response).await?;
+            Ok(SourceContentResult {
+                content,
+                used_cache: false,
+                fetched_at,
+            })
         }
         Ok(response) => {
             let reason = format!("HTTP status {}", response.status());
@@ -221,7 +243,11 @@ async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) ->
                     source.source_id,
                     cache.fetched_at
                 );
-                Ok(cache.content)
+                Ok(SourceContentResult {
+                    content: cache.content,
+                    used_cache: true,
+                    fetched_at: cache.fetched_at,
+                })
             } else {
                 bail!(
                     "orchestration source {} returned {reason} and has no cache",
@@ -238,7 +264,11 @@ async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) ->
                     source.source_id,
                     cache.fetched_at
                 );
-                Ok(cache.content)
+                Ok(SourceContentResult {
+                    content: cache.content,
+                    used_cache: true,
+                    fetched_at: cache.fetched_at,
+                })
             } else {
                 Err(error).with_context(|| {
                     format!(
@@ -269,16 +299,26 @@ pub async fn apply_to_profile_config(profile_uid: &str, config: &mut Mapping) ->
 
     let mut parsed_sources = Vec::new();
     for source in state.sources.iter().filter(|source| source.enabled) {
-        let content = fetch_source_content(profile_uid, source).await?;
-        parsed_sources.push(parse_subscription(&source.source_id, &content)?);
+        let fetched = fetch_source_content(profile_uid, source).await?;
+        parsed_sources.push(parse_subscription(&source.source_id, &fetched.content)?);
     }
 
-    let mut value = Value::Mapping(std::mem::take(config));
+    let mut value = Value::Mapping(config.clone());
     compile_value(&mut value, &parsed_sources, &state)?;
-    *config = value
+    let generated = value
         .as_mapping()
         .cloned()
         .context("generated orchestration config is not a mapping")?;
+    let yaml = to_mihomo_config_string(&Value::Mapping(generated.clone()))
+        .context("failed to serialize generated orchestration config")?;
+    let validation = CoreConfigValidator::global()
+        .validate_config_outcome_with(&yaml)
+        .await
+        .context("failed to validate generated orchestration config")?;
+    if !validation.is_valid() {
+        bail!("generated orchestration config failed Mihomo validation: {validation}");
+    }
+    *config = generated;
     Ok(())
 }
 
