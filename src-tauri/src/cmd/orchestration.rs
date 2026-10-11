@@ -22,7 +22,7 @@ pub async fn fetch_orchestration_source(
     timeout_seconds: Option<u64>,
 ) -> CmdResult<SourceFetchResult> {
     let result = if use_proxy {
-        orchestration::fetch_source_content(&profile_uid, &source).await
+        orchestration::fetch_source_content(&profile_uid, &source, timeout_seconds).await
     } else {
         let response = NetworkManager::new()
             .get(
