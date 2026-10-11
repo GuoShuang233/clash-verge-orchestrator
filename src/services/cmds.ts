@@ -9,9 +9,7 @@ import type {
   OrchestrationSource,
   OrchestrationState,
 } from '@/types/orchestration'
-import type {
-  ProxyViewV1,
-} from '@/types/proxy-view'
+import type { ProxyViewV1 } from '@/types/proxy-view'
 import { debugLog } from '@/utils/debug'
 
 export async function copyClashEnv() {
