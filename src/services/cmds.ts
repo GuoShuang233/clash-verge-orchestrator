@@ -5,7 +5,6 @@ import dayjs from 'dayjs'
 import type { CommandFailure } from '@/services/notice-service'
 import { showNotice } from '@/services/notice-service'
 import type {
-  OrchestrationNodeSummary,
   OrchestrationSourceFetchResult,
   OrchestrationSource,
   OrchestrationState,
