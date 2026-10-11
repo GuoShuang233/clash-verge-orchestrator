@@ -148,7 +148,7 @@ mod app_init {
             cmd::restart_core,
             cmd::upgrade_clash_core,
             cmd::list_managed_cores,
-            cmd::activate_managed_core,
+            cmd::validate_managed_core,
             cmd::get_runtime_state,
             cmd::get_pending_failures,
             cmd::get_sidecar_failure,

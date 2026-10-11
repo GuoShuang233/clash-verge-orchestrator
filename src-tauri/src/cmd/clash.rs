@@ -104,11 +104,13 @@ pub async fn upgrade_clash_core(force: bool) -> CmdResult<feat::CoreUpgradeRepor
 
 #[tauri::command]
 pub async fn list_managed_cores() -> CmdResult<Vec<feat::ManagedCore>> {
-    feat::list_managed_cores().await.with_error_code("CORE_REGISTRY_READ_FAILED")
+    feat::list_managed_cores()
+        .await
+        .with_error_code("CORE_REGISTRY_READ_FAILED")
 }
 
 #[tauri::command]
-pub async fn activate_managed_core(core_id: String) -> CmdResult<()> {
+pub async fn validate_managed_core(core_id: String) -> CmdResult<()> {
     feat::activate_managed_core(&core_id)
         .await
         .with_error_code("CORE_VALIDATION_FAILED")
