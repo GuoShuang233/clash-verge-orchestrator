@@ -49,6 +49,8 @@ interface GroupInfo {
   type: string
 }
 
+type CustomGroupDefinition = Record<string, unknown>
+
 const emptyState = (): OrchestrationState => ({
   sources: [],
   active_mode: 'upstream',
@@ -66,6 +68,7 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
   const [selectedSource, setSelectedSource] = useState('')
   const [sourceName, setSourceName] = useState('External subscription')
   const [sourceUrl, setSourceUrl] = useState('')
+  const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [dirty, setDirty] = useState(false)
 
@@ -101,6 +104,16 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
           })),
       )
       setState({ ...emptyState(), ...saved, groups: saved.groups ?? {} })
+      setCustomDrafts(
+        Object.fromEntries(
+          Object.entries(saved.groups ?? {})
+            .filter(([, binding]) => binding.custom)
+            .map(([name, binding]) => [
+              name,
+              JSON.stringify(binding.custom, null, 2),
+            ]),
+        ),
+      )
       setSelectedSource(saved.sources[0]?.source_id ?? '')
       const fetched = await Promise.all(
         saved.sources
@@ -229,13 +242,69 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
       ...current,
       groups: {
         ...current.groups,
-        [groupName]: { ...(current.groups[groupName] ?? { nodes: [] }), mode },
+        [groupName]: {
+          ...(current.groups[groupName] ?? { nodes: [] }),
+          mode,
+          ...(mode === 'custom' && !current.groups[groupName]?.custom
+            ? {
+                custom: {
+                  name: groupName,
+                  type: 'select',
+                  proxies: [],
+                },
+              }
+            : {}),
+        },
       },
     }))
+    if (mode === 'custom' && !customDrafts[groupName]) {
+      setCustomDrafts((current) => ({
+        ...current,
+        [groupName]: JSON.stringify(
+          { name: groupName, type: 'select', proxies: [] },
+          null,
+          2,
+        ),
+      }))
+    }
+    setDirty(true)
+  }
+
+  const updateCustomGroup = (groupName: string, text: string) => {
+    setCustomDrafts((current) => ({ ...current, [groupName]: text }))
+    try {
+      const custom = JSON.parse(text) as CustomGroupDefinition
+      if (!custom || Array.isArray(custom) || typeof custom !== 'object') return
+      setState((current) => ({
+        ...current,
+        groups: {
+          ...current.groups,
+          [groupName]: {
+            ...(current.groups[groupName] ?? { nodes: [] }),
+            custom,
+          },
+        },
+      }))
+    } catch {
+      // Keep the draft visible and let the field show the invalid JSON state.
+    }
     setDirty(true)
   }
 
   const save = useLockFn(async () => {
+    for (const [groupName, binding] of Object.entries(state.groups)) {
+      if (binding.mode !== 'custom') continue
+      const draft = customDrafts[groupName]
+      try {
+        const custom = JSON.parse(draft ?? JSON.stringify(binding.custom ?? {}))
+        if (!custom || Array.isArray(custom) || typeof custom !== 'object') {
+          throw new Error('custom group must be a JSON object')
+        }
+      } catch {
+        showNotice.error('Custom group ' + groupName + ' contains invalid JSON')
+        return
+      }
+    }
     setLoading(true)
     try {
       await mutate(() => saveOrchestrationState(profileUid, state), {
@@ -433,6 +502,42 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
                         <MenuItem value="custom">Custom</MenuItem>
                       </Select>
                     </Box>
+                    {binding.mode === 'custom' && (
+                      <TextField
+                        fullWidth
+                        multiline
+                        minRows={4}
+                        size="small"
+                        label="Custom group definition (JSON)"
+                        value={
+                          customDrafts[group.name] ??
+                          JSON.stringify(
+                            binding.custom ?? {
+                              name: group.name,
+                              type: 'select',
+                              proxies: [],
+                            },
+                            null,
+                            2,
+                          )
+                        }
+                        error={(() => {
+                          try {
+                            const value = JSON.parse(
+                              customDrafts[group.name] ?? '{}',
+                            )
+                            return !value || Array.isArray(value)
+                          } catch {
+                            return true
+                          }
+                        })()}
+                        helperText="Edit any Mihomo proxy-group fields. Use valid JSON."
+                        onChange={(event) =>
+                          updateCustomGroup(group.name, event.target.value)
+                        }
+                        sx={{ mt: 1 }}
+                      />
+                    )}
                     <Box
                       sx={{
                         display: 'flex',
