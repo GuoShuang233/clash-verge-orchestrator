@@ -411,9 +411,7 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
                       p: 1,
                     }}
                   >
-                    <Box
-                      sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
-                    >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography sx={{ flex: 1 }} variant="body2">
                         {group.name}{' '}
                         <Typography component="span" variant="caption">
