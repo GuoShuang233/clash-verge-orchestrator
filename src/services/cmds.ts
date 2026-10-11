@@ -6,6 +6,7 @@ import type { CommandFailure } from '@/services/notice-service'
 import { showNotice } from '@/services/notice-service'
 import type {
   OrchestrationNodeSummary,
+  OrchestrationSourceFetchResult,
   OrchestrationSource,
   OrchestrationState,
 } from '@/types/orchestration'
@@ -71,10 +72,12 @@ export async function saveOrchestrationState(
 
 export async function fetchOrchestrationSource(
   source: OrchestrationSource,
+  profileUid: string,
   useProxy = true,
 ) {
-  return invoke<OrchestrationNodeSummary[]>('fetch_orchestration_source', {
+  return invoke<OrchestrationSourceFetchResult>('fetch_orchestration_source', {
     source,
+    profileUid,
     useProxy,
     timeoutSeconds: 30,
   })
