@@ -1,9 +1,6 @@
 use crate::{
     cmd::{CmdResult, coded_error},
-    orchestration::{
-        self, NodeSummary, OrchestrationState, SourceContentResult, SourceFetchResult, SourceInput,
-        SubscriptionSource,
-    },
+    orchestration::{self, NodeSummary, OrchestrationState, SourceContentResult, SourceFetchResult, SourceInput, SubscriptionSource},
     utils::network::{NetworkManager, ProxyType},
 };
 use smartstring::alias::String as SmartString;
