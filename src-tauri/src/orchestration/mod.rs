@@ -212,12 +212,16 @@ async fn save_source_cache(
     Ok(fetched_at)
 }
 
-pub async fn fetch_source_content(profile_uid: &str, source: &SubscriptionSource) -> Result<SourceContentResult> {
+pub async fn fetch_source_content(
+    profile_uid: &str,
+    source: &SubscriptionSource,
+    timeout_seconds: Option<u64>,
+) -> Result<SourceContentResult> {
     let response = NetworkManager::new()
         .get(
             &source.url,
             ProxyType::Localhost,
-            Some(30),
+            timeout_seconds.or(Some(30)),
             source.user_agent.clone().map(SmartString::from),
             false,
         )
