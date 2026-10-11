@@ -7,6 +7,7 @@
 use anyhow::{Context as _, Result, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use percent_encoding::percent_decode_str;
+use reqwest::{HeaderMap, header::{ETAG, IF_NONE_MATCH, IF_MODIFIED_SINCE, LAST_MODIFIED}};
 use reqwest_dav::re_exports::url::Url;
 use serde::{Deserialize, Serialize};
 use serde_yaml_ng::{Mapping, Value};
@@ -80,6 +81,10 @@ pub struct SubscriptionSource {
 struct SourceCache {
     content: String,
     fetched_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    etag: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_modified: Option<String>,
 }
 
 const fn default_true() -> bool {
@@ -207,6 +212,12 @@ async fn save_source_cache(
     let cache = SourceCache {
         content: response.text().to_owned(),
         fetched_at,
+        etag: response.headers().get(ETAG).and_then(|value| value.to_str().ok()).map(str::to_owned),
+        last_modified: response
+            .headers()
+            .get(LAST_MODIFIED)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned),
     };
     crate::utils::help::save_yaml(&path, &cache, Some("# Subscription orchestration cache")).await?;
     Ok(fetched_at)
@@ -217,17 +228,31 @@ pub async fn fetch_source_content(
     source: &SubscriptionSource,
     timeout_seconds: Option<u64>,
 ) -> Result<SourceContentResult> {
+    let cache = load_source_cache(profile_uid, &source.source_id).await?;
+    let mut request_headers = HeaderMap::new();
+    if let Some(value) = cache.as_ref().and_then(|cache| cache.etag.as_deref()) {
+        request_headers.insert(IF_NONE_MATCH, value.parse()?);
+    }
+    if let Some(value) = cache.as_ref().and_then(|cache| cache.last_modified.as_deref()) {
+        request_headers.insert(IF_MODIFIED_SINCE, value.parse()?);
+    }
     let response = NetworkManager::new()
-        .get(
+        .get_with_headers(
             &source.url,
             ProxyType::Localhost,
             timeout_seconds.or(Some(30)),
             source.user_agent.clone().map(SmartString::from),
             false,
+            request_headers,
         )
         .await;
 
     match response {
+        Ok(response) if response.status() == reqwest::StatusCode::NOT_MODIFIED => {
+            let cache = cache.context("subscription returned 304 but no cache is available")?;
+            logging!(info, Type::Config, "orchestration source {} unchanged since {}", source.source_id, cache.fetched_at);
+            Ok(SourceContentResult { content: cache.content, used_cache: true, fetched_at: cache.fetched_at })
+        }
         Ok(response) if response.status().is_success() => {
             let content = response.text().to_owned();
             let fetched_at = save_source_cache(profile_uid, source, &response).await?;
@@ -239,7 +264,7 @@ pub async fn fetch_source_content(
         }
         Ok(response) => {
             let reason = format!("HTTP status {}", response.status());
-            if let Some(cache) = load_source_cache(profile_uid, &source.source_id).await? {
+            if let Some(cache) = cache {
                 logging!(
                     warn,
                     Type::Config,
