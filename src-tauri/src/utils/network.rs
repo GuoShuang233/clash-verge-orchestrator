@@ -26,7 +26,7 @@ impl HttpResponse {
         self.status
     }
 
-    pub const fn headers(&self) -> &HeaderMap {
+    pub fn headers(&self) -> &HeaderMap {
         &self.headers
     }
 
