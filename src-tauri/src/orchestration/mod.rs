@@ -375,7 +375,7 @@ pub fn parse_subscription(source_id: &str, content: &str) -> Result<ParsedSubscr
 pub fn stable_node_id(source_id: &str, node: &Value) -> Result<String> {
     let identity = if let Some(mapping) = node.as_mapping() {
         let mut mapping = mapping.clone();
-        mapping.remove(Value::String("name".into()));
+        mapping.remove(&Value::String("name".into()));
         Value::Mapping(mapping)
     } else {
         node.clone()
