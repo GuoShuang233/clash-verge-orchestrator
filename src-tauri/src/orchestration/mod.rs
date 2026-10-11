@@ -14,8 +14,8 @@ use sha2::{Digest as _, Sha256};
 use smartstring::alias::String as SmartString;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::utils::network::{NetworkManager, ProxyType};
 use crate::core::validate::CoreConfigValidator;
+use crate::utils::network::{NetworkManager, ProxyType};
 use crate::utils::yaml_emitter::to_mihomo_config_string;
 use clash_verge_logging::{Type, logging};
 
