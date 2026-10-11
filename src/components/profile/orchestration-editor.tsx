@@ -413,10 +413,10 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
                   ? 'failed · no usable cache'
                   : result?.used_cache
                     ? 'cached · last success ' +
-                        new Date(result.fetched_at * 1000).toLocaleString()
+                    new Date(result.fetched_at * 1000).toLocaleString()
                     : result
                       ? 'live · ' +
-                          new Date(result.fetched_at * 1000).toLocaleString()
+                        new Date(result.fetched_at * 1000).toLocaleString()
                       : 'not fetched'
                 return source.name + ' · ' + status
               })()}
