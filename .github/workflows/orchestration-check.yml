@@ -18,20 +18,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxslt1.1 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libglib2.0-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
       - name: Check formatting
-        run: cargo fmt --manifest-path ./src-tauri/Cargo.toml --all
-      - name: Upload formatted orchestration files
-        uses: actions/upload-artifact@v7
-        with:
-          name: formatted-orchestration
-          path: |
-            src-tauri/src/lib.rs
-            src-tauri/src/cmd/orchestration.rs
-            src-tauri/src/orchestration/mod.rs
-          if-no-files-found: error
+        run: cargo fmt --manifest-path ./src-tauri/Cargo.toml --all -- --check
       - name: Check backend
         run: cargo check --manifest-path ./src-tauri/Cargo.toml --all-features
       - name: Run orchestration tests
