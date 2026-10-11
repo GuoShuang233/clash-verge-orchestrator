@@ -35,6 +35,7 @@ import type {
   GroupMode,
   OrchestrationNodeRef,
   OrchestrationNodeSummary,
+  OrchestrationSourceFetchResult,
   OrchestrationSource,
   OrchestrationState,
 } from '@/types/orchestration'
@@ -71,12 +72,16 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
   const [customDrafts, setCustomDrafts] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [sourceStatus, setSourceStatus] = useState<
+    Record<string, OrchestrationSourceFetchResult>
+  >({})
 
   const refreshSource = async (source: OrchestrationSource) => {
     setLoading(true)
     try {
-      const result = await fetchOrchestrationSource(source)
-      setNodes((current) => ({ ...current, [source.source_id]: result }))
+      const result = await fetchOrchestrationSource(source, profileUid)
+      setNodes((current) => ({ ...current, [source.source_id]: result.nodes }))
+      setSourceStatus((current) => ({ ...current, [source.source_id]: result }))
     } catch (error) {
       setNodes((current) => ({ ...current, [source.source_id]: [] }))
       showNotice.error(error)
@@ -120,10 +125,12 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
           .filter((source) => source.enabled)
           .map(async (source) => {
             try {
-              return [
-                source.source_id,
-                await fetchOrchestrationSource(source),
-              ] as const
+              const result = await fetchOrchestrationSource(source, profileUid)
+              setSourceStatus((current) => ({
+                ...current,
+                [source.source_id]: result,
+              }))
+              return [source.source_id, result.nodes] as const
             } catch {
               return [source.source_id, []] as const
             }
@@ -388,7 +395,12 @@ export const OrchestrationEditor = ({ profileUid, open, onClose }: Props) => {
             sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
           >
             <Chip
-              label={source.name + ' · ' + source.url}
+              label={
+                source.name +
+                ' · ' +
+                source.url +
+                (sourceStatus[source.source_id]?.used_cache ? ' · cached' : '')
+              }
               sx={{ maxWidth: 'calc(100% - 80px)' }}
             />
             <IconButton
