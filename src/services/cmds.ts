@@ -4,6 +4,11 @@ import dayjs from 'dayjs'
 
 import type { CommandFailure } from '@/services/notice-service'
 import { showNotice } from '@/services/notice-service'
+import type {
+  OrchestrationSourceFetchResult,
+  OrchestrationSource,
+  OrchestrationState,
+} from '@/types/orchestration'
 import type { ProxyViewV1 } from '@/types/proxy-view'
 import { debugLog } from '@/utils/debug'
 
@@ -49,6 +54,32 @@ export async function saveProfileFile(index: string, fileData: string) {
       })
     ).status === 'valid'
   )
+}
+
+export async function getOrchestrationState(profileUid: string) {
+  return invoke<OrchestrationState>('get_orchestration_state', {
+    profileUid,
+  })
+}
+
+export async function saveOrchestrationState(
+  profileUid: string,
+  state: OrchestrationState,
+) {
+  return invoke<void>('save_orchestration_state', { profileUid, state })
+}
+
+export async function fetchOrchestrationSource(
+  source: OrchestrationSource,
+  profileUid: string,
+  useProxy = true,
+) {
+  return invoke<OrchestrationSourceFetchResult>('fetch_orchestration_source', {
+    source,
+    profileUid,
+    useProxy,
+    timeoutSeconds: 30,
+  })
 }
 
 export async function importProfile(url: string, option?: IProfileOption) {
@@ -280,6 +311,25 @@ export interface CoreUpgradeReport {
 
 export async function upgradeClashCore(force = false) {
   return invoke<CoreUpgradeReport>('upgrade_clash_core', { force })
+}
+
+export interface ManagedCore {
+  id: string
+  display_name: string
+  kind: 'mihomo' | 'mihomoalpha'
+  executable_name: string
+  path: string
+  installed: boolean
+  installed_version?: string
+  active: boolean
+  verified: boolean
+  last_verified_at?: number
+  can_update: boolean
+  can_remove: boolean
+}
+
+export async function listManagedCores() {
+  return invoke<ManagedCore[]>('list_managed_cores')
 }
 
 export async function restartApp() {

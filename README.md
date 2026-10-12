@@ -21,6 +21,17 @@ A Clash Meta GUI based on <a href="https://github.com/tauri-apps/tauri">Tauri</a
   <a href="./README.md">简体中文</a>
 </p>
 
+## About this fork
+
+This repository is an independent GPLv3-or-later fork of Clash Verge Rev. It
+is intended to add local subscription orchestration: nodes from multiple
+subscription sources can be managed as reusable objects, assigned to proxy
+groups, and used with upstream, hybrid, or fully custom group configuration.
+
+The fork is not an official Clash Verge Rev release. See [NOTICE](./NOTICE),
+[LICENSE](./LICENSE), and [THIRD_PARTY_LICENSES.md](./THIRD_PARTY_LICENSES.md)
+for licensing information.
+
 ## Preview
 
 | Dark                             | Light                             |

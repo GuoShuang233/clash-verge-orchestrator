@@ -957,6 +957,11 @@ pub async fn enhance(
     )
     .await;
 
+    let mut config = config;
+    if let Err(error) = crate::orchestration::apply_to_profile_config(profile_uid, &mut config).await {
+        logging!(warn, Type::Config, "subscription orchestration skipped: {error:#}");
+    }
+
     notify_discarded_keys(authoritative.overridden(&authoritative, &authoritative.current(&config)));
     let config = authoritative.enforce(config);
     let config = ensure_lan_bind_address(config);

@@ -7,6 +7,7 @@ mod constants;
 mod core;
 mod enhance;
 mod feat;
+pub mod orchestration;
 mod process;
 pub mod utils;
 
@@ -146,6 +147,12 @@ mod app_init {
             cmd::cancel_update_download,
             cmd::restart_core,
             cmd::upgrade_clash_core,
+            cmd::check_managed_core_update,
+            cmd::upgrade_managed_core,
+            cmd::rollback_managed_core,
+            cmd::remove_managed_core,
+            cmd::list_managed_cores,
+            cmd::validate_managed_core,
             cmd::get_runtime_state,
             cmd::get_pending_failures,
             cmd::get_sidecar_failure,
@@ -220,6 +227,11 @@ mod app_init {
             cmd::get_unlock_items,
             cmd::check_media_unlock,
             cmd::check_media_unlock_item,
+            cmd::preview_orchestration,
+            cmd::get_orchestration_state,
+            cmd::save_orchestration_state,
+            cmd::preview_orchestration_source,
+            cmd::fetch_orchestration_source,
         ]
     }
 }

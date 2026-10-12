@@ -1,0 +1,33 @@
+name: Orchestration backend check
+
+on:
+  push:
+    branches:
+      - dev
+      - feature/subscription-orchestration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HUSKY: 0
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxslt1.1 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libglib2.0-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --manifest-path ./src-tauri/Cargo.toml --all -- --check
+      - name: Check backend
+        run: cargo check --manifest-path ./src-tauri/Cargo.toml --all-features
+      - name: Run orchestration tests
+        run: cargo test --manifest-path ./src-tauri/Cargo.toml --all-features orchestration

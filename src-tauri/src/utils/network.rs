@@ -155,6 +155,7 @@ impl NetworkManager {
         detail.contains("protocolversion") || detail.contains("protocol version")
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn get_with_tls_mode(
         &self,
         url: &str,

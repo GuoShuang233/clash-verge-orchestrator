@@ -1,6 +1,7 @@
 mod backup;
 mod clash;
 mod config;
+mod core_registry;
 mod core_upgrade;
 mod dns;
 mod effects;
@@ -16,6 +17,7 @@ mod window;
 pub use backup::*;
 pub use clash::*;
 pub use config::*;
+pub use core_registry::*;
 pub use core_upgrade::*;
 pub use dns::*;
 pub use icon::*;
