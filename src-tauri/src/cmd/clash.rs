@@ -111,8 +111,7 @@ pub async fn list_managed_cores() -> CmdResult<Vec<feat::ManagedCore>> {
 
 #[tauri::command]
 pub async fn validate_managed_core(core_id: String) -> CmdResult<()> {
-    feat::activate_managed_core(&core_id)
-        .with_error_code("CORE_VALIDATION_FAILED")?;
+    feat::activate_managed_core(&core_id).with_error_code("CORE_VALIDATION_FAILED")?;
     feat::record_verification(&core_id)
         .await
         .with_error_code("CORE_VALIDATION_RECORD_FAILED")
