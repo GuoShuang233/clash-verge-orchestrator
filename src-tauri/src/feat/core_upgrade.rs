@@ -80,31 +80,25 @@ pub async fn rollback_managed_core(core_id: &str) -> Result<CoreUpgradeReport> {
     let staged = copy_staged_core(&target, &rollback)?;
     let current_backup = copy_staged_core(&target, &target)?;
     let current_backup_path = current_backup.path.clone();
-    if let Err(error) = staged.publish(&target) {
-        return Err(error);
-    }
+    staged.publish(&target)?;
     let restart = active == core_id;
     let service_mode = matches!(*CoreManager::global().get_running_mode(), RunningMode::Service);
-    if service_mode {
-        if let Err(error) = crate::core::service::stage_approved_core(&target) {
-            let _ = StagedCore {
-                path: current_backup_path.clone(),
-            }
-            .publish(&target);
-            bail!("rollback published but service staging failed: {error:#}");
+    if service_mode && let Err(error) = crate::core::service::stage_approved_core(&target) {
+        let _ = StagedCore {
+            path: current_backup_path.clone(),
         }
+        .publish(&target);
+        bail!("rollback published but service staging failed: {error:#}");
     }
-    if restart {
-        if let Err(error) = CoreManager::global().restart_core().await {
-            let _ = StagedCore {
-                path: current_backup_path.clone(),
-            }
-            .publish(&target);
-            if service_mode {
-                let _ = crate::core::service::stage_approved_core(&target);
-            }
-            return Err(error).context("rolled back core but failed to restart");
+    if restart && let Err(error) = CoreManager::global().restart_core().await {
+        let _ = StagedCore {
+            path: current_backup_path.clone(),
         }
+        .publish(&target);
+        if service_mode {
+            let _ = crate::core::service::stage_approved_core(&target);
+        }
+        return Err(error).context("rolled back core but failed to restart");
     }
     let _ = std::fs::remove_file(&rollback);
     std::fs::rename(&current_backup_path, &rollback)
@@ -151,7 +145,7 @@ async fn upgrade_core_locked(core: &str, force: bool, restart_after_publish: boo
     validate_core_id(core)?;
     tracing::Span::current().record("core", tracing::field::display(&core));
     let alpha = core.ends_with("-alpha");
-    let target = managed_core_path(&core)?;
+    let target = managed_core_path(core)?;
 
     // A core already broken by the in-place updater cannot report a version; upgrading is the repair.
     let installed = read_core_version(&target).unwrap_or_else(|error| {
