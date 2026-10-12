@@ -332,10 +332,6 @@ export async function listManagedCores() {
   return invoke<ManagedCore[]>('list_managed_cores')
 }
 
-export async function validateManagedCore(coreId: string) {
-  return invoke<void>('validate_managed_core', { coreId })
-}
-
 export async function restartApp() {
   return invoke<void>('restart_app')
 }
