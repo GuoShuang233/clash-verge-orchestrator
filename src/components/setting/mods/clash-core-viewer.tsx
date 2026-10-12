@@ -210,4 +210,3 @@ export function ClashCoreViewer({ ref }: { ref?: Ref<DialogRef> }) {
     </BaseDialog>
   )
 }
-
