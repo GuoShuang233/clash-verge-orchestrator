@@ -103,6 +103,42 @@ pub async fn upgrade_clash_core(force: bool) -> CmdResult<feat::CoreUpgradeRepor
 }
 
 #[tauri::command]
+pub async fn check_managed_core_update(core_id: String) -> CmdResult<feat::CoreUpdateReport> {
+    feat::check_core_update(&core_id)
+        .await
+        .with_error_code("CORE_UPDATE_CHECK_FAILED")
+}
+
+#[tauri::command]
+pub async fn upgrade_managed_core(core_id: String, force: bool) -> CmdResult<feat::CoreUpgradeReport> {
+    let report = feat::upgrade_managed_core(&core_id, force)
+        .await
+        .with_error_code("CORE_UPGRADE_FAILED")?;
+    if report.restarted {
+        handle::Handle::refresh_clash();
+    }
+    Ok(report)
+}
+
+#[tauri::command]
+pub async fn rollback_managed_core(core_id: String) -> CmdResult<feat::CoreUpgradeReport> {
+    let report = feat::rollback_managed_core(&core_id)
+        .await
+        .with_error_code("CORE_ROLLBACK_FAILED")?;
+    if report.restarted {
+        handle::Handle::refresh_clash();
+    }
+    Ok(report)
+}
+
+#[tauri::command]
+pub async fn remove_managed_core(core_id: String) -> CmdResult {
+    feat::remove_managed_core(&core_id)
+        .await
+        .with_error_code("CORE_REMOVE_FAILED")
+}
+
+#[tauri::command]
 pub async fn list_managed_cores() -> CmdResult<Vec<feat::ManagedCore>> {
     feat::list_managed_cores()
         .await
