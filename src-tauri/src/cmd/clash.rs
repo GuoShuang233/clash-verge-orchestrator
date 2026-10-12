@@ -112,8 +112,10 @@ pub async fn list_managed_cores() -> CmdResult<Vec<feat::ManagedCore>> {
 #[tauri::command]
 pub async fn validate_managed_core(core_id: String) -> CmdResult<()> {
     feat::activate_managed_core(&core_id)
+        .with_error_code("CORE_VALIDATION_FAILED")?;
+    feat::record_verification(&core_id)
         .await
-        .with_error_code("CORE_VALIDATION_FAILED")
+        .with_error_code("CORE_VALIDATION_RECORD_FAILED")
 }
 
 #[tauri::command]
@@ -250,3 +252,4 @@ pub async fn get_clash_logs() -> CmdResult<Vec<std::string::String>> {
     let logs = CoreManager::global().get_clash_logs().await.unwrap_or_default();
     Ok(logs)
 }
+
