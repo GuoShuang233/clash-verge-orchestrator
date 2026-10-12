@@ -217,8 +217,8 @@ async fn upgrade_core_locked(core: &str, force: bool, restart_after_publish: boo
         // after the new core started must keep the new file instead. A service that refused the
         // new core also restores: leaving the new file would make a retry read the new version
         // and report nothing to do while the service keeps running the old core.
-        let core_is_down = restart_after_publish
-            && matches!(*CoreManager::global().get_running_mode(), RunningMode::NotRunning);
+        let core_is_down =
+            restart_after_publish && matches!(*CoreManager::global().get_running_mode(), RunningMode::NotRunning);
         if restorable
             && (matches!(service_staging, ServiceStaging::Refused) || core_is_down || !target.exists())
             && std::fs::rename(&rollback, &target).is_ok()
