@@ -32,6 +32,7 @@ pub struct ManagedCore {
     pub verified: bool,
     pub last_verified_at: Option<i64>,
     pub can_update: bool,
+    pub can_rollback: bool,
     pub can_remove: bool,
 }
 
@@ -102,6 +103,10 @@ pub async fn list_managed_cores() -> Result<Vec<ManagedCore>> {
         let installed = path.is_file();
         let verified_version = installed.then(|| version_for(&path)).flatten();
         let verified = installed && verified_version.is_some();
+        let can_rollback = executable_path(id)
+            .ok()
+            .and_then(|path| path.parent().map(|parent| parent.join(format!(".{id}.rollback"))))
+            .is_some_and(|path| path.is_file() && version_for(&path).is_some());
         let entry = registry.entries.iter().find(|entry| entry.id == *id);
         result.push(ManagedCore {
             id: (*id).to_owned(),
@@ -118,6 +123,7 @@ pub async fn list_managed_cores() -> Result<Vec<ManagedCore>> {
             verified,
             last_verified_at: entry.and_then(|entry| entry.last_verified_at),
             can_update: installed,
+            can_rollback,
             can_remove: installed && active != *id,
         });
     }
@@ -166,4 +172,3 @@ pub async fn record_verification(id: &str) -> Result<()> {
     }
     crate::utils::help::save_yaml(&path, &registry, Some("# Managed Clash core registry")).await
 }
-
