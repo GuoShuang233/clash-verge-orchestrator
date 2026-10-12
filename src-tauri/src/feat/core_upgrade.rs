@@ -7,7 +7,7 @@
 //! the running core is executing from, so no page validation can fail.
 
 use crate::{
-    config::Config,
+    config::{Config, IVerge},
     core::{CoreManager, manager::RunningMode},
     utils::network::{NetworkManager, ProxyType},
 };
@@ -40,11 +40,115 @@ pub struct CoreUpgradeReport {
     pub upgraded: bool,
     pub from: std::string::String,
     pub to: std::string::String,
+    pub core_id: std::string::String,
+    pub restarted: bool,
 }
 
 pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
     let _serialized = UPGRADE_LOCK.lock().await;
     let core = Config::verge().await.latest_arc().get_valid_clash_core();
+    upgrade_core_locked(&core, force, true).await
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct CoreUpdateReport {
+    pub core_id: std::string::String,
+    pub installed_version: Option<std::string::String>,
+    pub latest_version: std::string::String,
+    pub update_available: bool,
+}
+
+pub async fn check_core_update(core_id: &str) -> Result<CoreUpdateReport> {
+    let _serialized = UPGRADE_LOCK.lock().await;
+    check_core_update_locked(core_id).await
+}
+
+pub async fn upgrade_managed_core(core_id: &str, force: bool) -> Result<CoreUpgradeReport> {
+    let _serialized = UPGRADE_LOCK.lock().await;
+    let active = Config::verge().await.latest_arc().get_valid_clash_core();
+    upgrade_core_locked(core_id, force, active == core_id).await
+}
+
+pub async fn rollback_managed_core(core_id: &str) -> Result<CoreUpgradeReport> {
+    let _serialized = UPGRADE_LOCK.lock().await;
+    validate_core_id(core_id)?;
+    let active = Config::verge().await.latest_arc().get_valid_clash_core();
+    let target = managed_core_path(core_id)?;
+    let rollback = rollback_path(core_id)?;
+    let previous = read_core_version(&rollback).context("rollback copy is not a runnable core")?;
+    let current = read_core_version(&target).unwrap_or_default();
+    let staged = copy_staged_core(&target, &rollback)?;
+    let current_backup = copy_staged_core(&target, &target)?;
+    let current_backup_path = current_backup.path.clone();
+    if let Err(error) = staged.publish(&target) {
+        return Err(error);
+    }
+    let restart = active == core_id;
+    let service_mode = matches!(*CoreManager::global().get_running_mode(), RunningMode::Service);
+    if service_mode {
+        if let Err(error) = crate::core::service::stage_approved_core(&target) {
+            let _ = StagedCore {
+                path: current_backup_path.clone(),
+            }
+            .publish(&target);
+            bail!("rollback published but service staging failed: {error:#}");
+        }
+    }
+    if restart {
+        if let Err(error) = CoreManager::global().restart_core().await {
+            let _ = StagedCore {
+                path: current_backup_path.clone(),
+            }
+            .publish(&target);
+            if service_mode {
+                let _ = crate::core::service::stage_approved_core(&target);
+            }
+            return Err(error).context("rolled back core but failed to restart");
+        }
+    }
+    let _ = std::fs::remove_file(&rollback);
+    std::fs::rename(&current_backup_path, &rollback)
+        .with_context(|| format!("failed to save the previous core for another rollback: {core_id}"))?;
+    Ok(CoreUpgradeReport {
+        upgraded: true,
+        from: current,
+        to: previous,
+        core_id: core_id.to_owned(),
+        restarted: restart,
+    })
+}
+
+pub async fn remove_managed_core(core_id: &str) -> Result<()> {
+    let _serialized = UPGRADE_LOCK.lock().await;
+    validate_core_id(core_id)?;
+    let active = Config::verge().await.latest_arc().get_valid_clash_core();
+    if active == core_id {
+        bail!("cannot remove the active managed core: {core_id}");
+    }
+    let target = managed_core_path(core_id)?;
+    if target.is_file() {
+        std::fs::remove_file(&target).with_context(|| format!("failed to remove managed core {}", target.display()))?;
+    }
+    let _ = std::fs::remove_file(rollback_path(core_id)?);
+    let _ = std::fs::remove_file(target.with_extension("old"));
+    Ok(())
+}
+
+async fn check_core_update_locked(core_id: &str) -> Result<CoreUpdateReport> {
+    validate_core_id(core_id)?;
+    let target = managed_core_path(core_id)?;
+    let installed_version = read_core_version(&target).ok();
+    let latest_version = resolve_latest_version(core_id.ends_with("-alpha")).await?.1;
+    Ok(CoreUpdateReport {
+        core_id: core_id.to_owned(),
+        update_available: installed_version.as_deref() != Some(latest_version.as_str()),
+        installed_version,
+        latest_version,
+    })
+}
+
+async fn upgrade_core_locked(core: &str, force: bool, restart_after_publish: bool) -> Result<CoreUpgradeReport> {
+    validate_core_id(core)?;
     tracing::Span::current().record("core", tracing::field::display(&core));
     let alpha = core.ends_with("-alpha");
     let target = managed_core_path(&core)?;
@@ -66,6 +170,8 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
             upgraded: false,
             from: installed,
             to: latest,
+            core_id: core.to_owned(),
+            restarted: false,
         });
     }
 
@@ -99,7 +205,7 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
     } else {
         ServiceStaging::NotAttempted
     };
-    if result.is_ok() {
+    if result.is_ok() && restart_after_publish {
         result = CoreManager::global()
             .restart_core()
             .await
@@ -111,7 +217,8 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
         // after the new core started must keep the new file instead. A service that refused the
         // new core also restores: leaving the new file would make a retry read the new version
         // and report nothing to do while the service keeps running the old core.
-        let core_is_down = matches!(*CoreManager::global().get_running_mode(), RunningMode::NotRunning);
+        let core_is_down = restart_after_publish
+            && matches!(*CoreManager::global().get_running_mode(), RunningMode::NotRunning);
         if restorable
             && (matches!(service_staging, ServiceStaging::Refused) || core_is_down || !target.exists())
             && std::fs::rename(&rollback, &target).is_ok()
@@ -154,7 +261,35 @@ pub async fn upgrade_core(force: bool) -> Result<CoreUpgradeReport> {
         upgraded: true,
         from: installed,
         to: latest,
+        core_id: core.to_owned(),
+        restarted: restart_after_publish,
     })
+}
+
+fn validate_core_id(core_id: &str) -> Result<()> {
+    if IVerge::VALID_CLASH_CORES.contains(&core_id) {
+        Ok(())
+    } else {
+        bail!("invalid managed core: {core_id}")
+    }
+}
+
+fn rollback_path(core_id: &str) -> Result<PathBuf> {
+    let target = managed_core_path(core_id)?;
+    Ok(target.with_file_name(format!(".{core_id}.rollback")))
+}
+
+fn copy_staged_core(target: &Path, source: &Path) -> Result<StagedCore> {
+    let directory = target.parent().context("managed core has no parent directory")?;
+    let core_name = target.file_name().context("managed core has no filename")?;
+    let (path, mut file) = create_staging_file(directory, core_name)?;
+    let staged = StagedCore { path };
+    let mut input = File::open(source).with_context(|| format!("failed to open {}", source.display()))?;
+    std::io::copy(&mut input, &mut file).context("failed to copy rollback core")?;
+    file.sync_all().context("failed to flush rollback core")?;
+    drop(file);
+    read_core_version(&staged.path).context("rollback core is not runnable")?;
+    Ok(staged)
 }
 
 /// Whether this upgrade handed bytes to the Service's approved core directory.
