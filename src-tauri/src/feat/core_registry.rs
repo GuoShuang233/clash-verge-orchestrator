@@ -125,7 +125,7 @@ pub async fn list_managed_cores() -> Result<Vec<ManagedCore>> {
     Ok(result)
 }
 
-pub async fn activate_managed_core(id: &str) -> Result<()> {
+pub fn activate_managed_core(id: &str) -> Result<()> {
     let path = executable_path(id)?;
     if !path.is_file() {
         bail!("managed core is not installed: {id}");
@@ -166,3 +166,4 @@ pub async fn record_verification(id: &str) -> Result<()> {
     }
     crate::utils::help::save_yaml(&path, &registry, Some("# Managed Clash core registry")).await
 }
+
