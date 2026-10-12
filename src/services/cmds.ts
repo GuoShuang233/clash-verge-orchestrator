@@ -657,4 +657,3 @@ export async function checkMediaUnlock(onComplete: Channel<UnlockItem>) {
 export async function checkMediaUnlockItem(name: string) {
   return invoke<UnlockItem>('check_media_unlock_item', { name })
 }
-
